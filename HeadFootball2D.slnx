@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Headfootball.Client/Headfootball.Client.csproj" Id="b53a5590-a1d5-41f6-9cdb-959ab687aee5" />
+  <Project Path="HeadFootball.server/HeadFootball.Server.csproj" Id="7202c400-1858-4865-805e-ae38ed71a5fd" />
+  <Project Path="HeadFootball.shared/HeadFootball.Shared.csproj" Id="c400fe50-d53d-4114-b415-766051bd8317" />
+</Solution>
