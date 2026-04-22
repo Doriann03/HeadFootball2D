@@ -49,9 +49,7 @@ namespace HeadFootball.Server
             {
                 Thread.Sleep(16);
 
-                _physics.Update(_state, _input1, _input2);
-
-                int goal = _physics.CheckGoal(_state);
+                int goal = _physics.Update(_state, _input1, _input2);
                 if (goal == 1) _state.Score1++;
                 if (goal == 2) _state.Score2++;
 

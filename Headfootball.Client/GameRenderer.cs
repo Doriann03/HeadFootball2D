@@ -7,8 +7,9 @@ namespace Headfootball.Client
         private const float FieldW = 700;
         private const float FieldH = 400;
         private const float GroundY = 330;
-        private const float GoalH = 80;
-        private const float GoalW = 20;
+        // Match server goal size
+        private const float GoalH = 120;
+        private const float GoalW = 40;
 
         public void Draw(Graphics g, GameState state, int playerId)
         {
@@ -64,36 +65,37 @@ namespace Headfootball.Client
             using var bodyBrush = new SolidBrush(bodyColor);
             g.FillRectangle(bodyBrush, x, y + ph / 2, pw, ph / 2);
 
-            // Picior (gheata)
-            using var bootBrush = new SolidBrush(Color.FromArgb(40, 40, 40));
+            // Picior unic, mai mare si solid
+            using var bootBrush = new SolidBrush(Color.FromArgb(30, 30, 30));
             using var bootPen = new Pen(Color.Black, 1.5f);
+
+            float footW = 28f;
+            float footH = 14f;
 
             if (isKicking)
             {
-                // Picior ridicat la sut (usor in fata)
-                float kickX = facingRight ? x + pw - 2 : x - 22;
-                float kickY = y + ph / 2 + 2;
-                g.FillEllipse(bootBrush, kickX, kickY, 24, 12);
-                g.DrawEllipse(bootPen, kickX, kickY, 24, 12);
+                // Picior ridicat la sut - vizibil si in fata
+                float kickX = facingRight ? x + pw - 4 : x - (footW - 8);
+                float kickY = y + ph / 2;
+                g.FillEllipse(bootBrush, kickX, kickY, footW, footH);
+                g.DrawEllipse(bootPen, kickX, kickY, footW, footH);
             }
             else
             {
-                // Picior jos normal - facem piciorul din fata sa iasa putin in fata corpului
+                // Picior in pozitie normala, iesit putin in fata corpului
                 if (facingRight)
                 {
-                    // picior din fata (dreapta) avansat usor
-                    g.FillEllipse(bootBrush, x + 2, y + ph - 10, 16, 12);
-                    g.DrawEllipse(bootPen, x + 2, y + ph - 10, 16, 12);
-                    g.FillEllipse(bootBrush, x + pw - 6, y + ph - 12, 18, 12);
-                    g.DrawEllipse(bootPen, x + pw - 6, y + ph - 12, 18, 12);
+                    float fx = x + pw - 8;
+                    float fy = y + ph - footH - 4;
+                    g.FillEllipse(bootBrush, fx, fy, footW, footH);
+                    g.DrawEllipse(bootPen, fx, fy, footW, footH);
                 }
                 else
                 {
-                    // picior din fata (stanga) avansat usor
-                    g.FillEllipse(bootBrush, x - 6, y + ph - 12, 18, 12);
-                    g.DrawEllipse(bootPen, x - 6, y + ph - 12, 18, 12);
-                    g.FillEllipse(bootBrush, x + pw - 18, y + ph - 10, 16, 12);
-                    g.DrawEllipse(bootPen, x + pw - 18, y + ph - 10, 16, 12);
+                    float fx = x - (footW - 8);
+                    float fy = y + ph - footH - 4;
+                    g.FillEllipse(bootBrush, fx, fy, footW, footH);
+                    g.DrawEllipse(bootPen, fx, fy, footW, footH);
                 }
             }
 
