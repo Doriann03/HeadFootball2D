@@ -13,5 +13,7 @@
         public int TimeLeft = 90;
         public bool GameStarted = false;
         public bool GameOver = false;
+        public bool Player1Kicking = false;
+        public bool Player2Kicking = false;
     }
 }

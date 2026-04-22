@@ -36,13 +36,15 @@ namespace Headfootball.Client
             g.FillRectangle(goalBrush, FieldW - GoalW, GroundY - GoalH, GoalW, GoalH);
             g.DrawRectangle(goalPen, FieldW - GoalW, GroundY - GoalH, GoalW, GoalH);
 
-            // Jucator 1 (albastru)
+            // Jucator 1 (albastru) - fata spre dreapta
             DrawPlayer(g, state.Player1X, state.Player1Y, Color.DodgerBlue,
-                       Color.DarkBlue, "P1", playerId == 1);
+                       Color.DarkBlue, "P1", playerId == 1,
+                       isKicking: state.Player1Kicking, facingRight: true);
 
-            // Jucator 2 (rosu)
+            // Jucator 2 (rosu) - fata spre stanga
             DrawPlayer(g, state.Player2X, state.Player2Y, Color.Tomato,
-                       Color.DarkRed, "P2", playerId == 2);
+                       Color.DarkRed, "P2", playerId == 2,
+                       isKicking: state.Player2Kicking, facingRight: false);
 
             // Minge
             DrawBall(g, state.BallX, state.BallY);
@@ -52,8 +54,8 @@ namespace Headfootball.Client
         }
 
         private void DrawPlayer(Graphics g, float x, float y,
-                                  Color bodyColor, Color headColor,
-                                  string label, bool isYou)
+                          Color bodyColor, Color headColor,
+                          string label, bool isYou, bool isKicking, bool facingRight)
         {
             const float pw = 40, ph = 60;
             const float headR = 22;
@@ -62,11 +64,42 @@ namespace Headfootball.Client
             using var bodyBrush = new SolidBrush(bodyColor);
             g.FillRectangle(bodyBrush, x, y + ph / 2, pw, ph / 2);
 
-            // Cap (cerc mare)
+            // Picior (gheata)
+            using var bootBrush = new SolidBrush(Color.FromArgb(40, 40, 40));
+            using var bootPen = new Pen(Color.Black, 1.5f);
+
+            if (isKicking)
+            {
+                // Picior ridicat la sut (usor in fata)
+                float kickX = facingRight ? x + pw - 2 : x - 22;
+                float kickY = y + ph / 2 + 2;
+                g.FillEllipse(bootBrush, kickX, kickY, 24, 12);
+                g.DrawEllipse(bootPen, kickX, kickY, 24, 12);
+            }
+            else
+            {
+                // Picior jos normal - facem piciorul din fata sa iasa putin in fata corpului
+                if (facingRight)
+                {
+                    // picior din fata (dreapta) avansat usor
+                    g.FillEllipse(bootBrush, x + 2, y + ph - 10, 16, 12);
+                    g.DrawEllipse(bootPen, x + 2, y + ph - 10, 16, 12);
+                    g.FillEllipse(bootBrush, x + pw - 6, y + ph - 12, 18, 12);
+                    g.DrawEllipse(bootPen, x + pw - 6, y + ph - 12, 18, 12);
+                }
+                else
+                {
+                    // picior din fata (stanga) avansat usor
+                    g.FillEllipse(bootBrush, x - 6, y + ph - 12, 18, 12);
+                    g.DrawEllipse(bootPen, x - 6, y + ph - 12, 18, 12);
+                    g.FillEllipse(bootBrush, x + pw - 18, y + ph - 10, 16, 12);
+                    g.DrawEllipse(bootPen, x + pw - 18, y + ph - 10, 16, 12);
+                }
+            }
+
+            // Cap
             using var headBrush = new SolidBrush(headColor);
             g.FillEllipse(headBrush, x - 2, y, headR * 2, headR * 2);
-
-            // Contur cap
             using var outlinePen = new Pen(Color.Black, 1.5f);
             g.DrawEllipse(outlinePen, x - 2, y, headR * 2, headR * 2);
 
@@ -74,7 +107,7 @@ namespace Headfootball.Client
             g.FillEllipse(Brushes.White, x + 8, y + 8, 8, 8);
             g.FillEllipse(Brushes.Black, x + 10, y + 10, 4, 4);
 
-            // Label (YOU sau P1/P2)
+            // Label
             string displayLabel = isYou ? "YOU" : label;
             using var font = new Font("Arial", 8, FontStyle.Bold);
             using var labelBrush = new SolidBrush(isYou ? Color.Yellow : Color.White);

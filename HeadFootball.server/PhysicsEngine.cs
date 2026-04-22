@@ -32,6 +32,8 @@ namespace HeadFootball.Server
 
         public void Update(GameState state, PlayerInput input1, PlayerInput input2)
         {
+            state.Player1Kicking = input1.Kick;
+            state.Player2Kicking = input2.Kick;
             MovePlayer(ref state.Player1X, ref state.Player1Y, ref _vel1Y, input1, true);
             MovePlayer(ref state.Player2X, ref state.Player2Y, ref _vel2Y, input2, false);
             UpdateBall(state, input1, input2);
@@ -60,8 +62,9 @@ namespace HeadFootball.Server
             }
 
             // Margini teren
-            float minX = isPlayer1 ? GoalWidth : FieldWidth / 2 + 5;
-            float maxX = isPlayer1 ? FieldWidth / 2 - 5 : FieldWidth - GoalWidth - PlayerWidth;
+            // Permitem jucatorilor sa treaca in jumatatea adversa, doar nu sa iasa din teren
+            float minX = GoalWidth;
+            float maxX = FieldWidth - GoalWidth - PlayerWidth;
             x = Math.Clamp(x, minX, maxX);
         }
 
@@ -113,8 +116,9 @@ namespace HeadFootball.Server
                 float nx = dx / dist;
                 float ny = dy / dist;
 
-                _velBallX = nx * (kick ? 10f : 6f) + kickDir * (kick ? 3f : 0);
-                _velBallY = ny * 6f + (kick ? -4f : 0);
+                // When kicking, give the ball a stronger forward push and a noticeable upward arc
+                _velBallX = nx * (kick ? 12f : 6f) + kickDir * (kick ? 4f : 0);
+                _velBallY = ny * 6f + (kick ? -8f : 0);
 
                 bx = centerX + nx * (BallRadius + PlayerWidth / 2 + 1);
                 by = centerY + ny * (BallRadius + PlayerWidth / 2 + 1);
