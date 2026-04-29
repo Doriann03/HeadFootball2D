@@ -43,6 +43,36 @@ namespace Headfootball.Client
             ConnectToServer();
         }
 
+        public MainForm(NetworkClient network, int playerId)
+        {
+            _network = network;
+            _playerId = playerId;
+
+            this.Text = "Head Football 2D";
+            this.ClientSize = new Size(700, 400);
+            this.FormBorderStyle = FormBorderStyle.FixedSingle;
+            this.MaximizeBox = false;
+            this.DoubleBuffered = true;
+            this.KeyDown += OnKeyDown;
+            this.KeyUp += OnKeyUp;
+            this.KeyPreview = true;
+
+            _renderTimer.Interval = 16;
+            _renderTimer.Tick += (s, e) => this.Invalidate();
+            _renderTimer.Start();
+
+            _inputTimer.Interval = 16;
+            _inputTimer.Tick += SendInput;
+            _inputTimer.Start();
+
+            _network.OnStateReceived += state => _state = state;
+            _network.OnGameOver += state =>
+            {
+                _state = state;
+                _gameOver = true;
+                _inputTimer.Stop();
+            };
+        }
         private void ConnectToServer()
         {
             string host = "10.13.50.153"; // schimba cu IP-ul serverului daca e alt PC
