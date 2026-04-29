@@ -1,44 +1,62 @@
-﻿using System.Net.Sockets;
-using HeadFootball.Shared;
+﻿using HeadFootball.Shared;
 using Newtonsoft.Json;
 
 namespace HeadFootball.Server
 {
     public class GameRoom
     {
-        private TcpClient _client1, _client2;
-        private StreamWriter _writer1, _writer2;
-        private GameState _state = new();
-        private PhysicsEngine _physics = new();
+        private readonly ClientHandler _player1;
+        private readonly ClientHandler _player2;
+        private readonly List<ClientHandler> _spectators;
+        private readonly Database _db;
+
+        private readonly GameState _state = new();
+        private readonly PhysicsEngine _physics = new();
         private PlayerInput _input1 = new() { PlayerId = 1 };
         private PlayerInput _input2 = new() { PlayerId = 2 };
         private bool _running = false;
-        private readonly Database _db;
 
-        public GameRoom(TcpClient client1, TcpClient client2, Database db)
+        public GameRoom(ClientHandler player1, ClientHandler player2,
+                        List<ClientHandler> spectators, Database db)
         {
-            _client1 = client1;
-            _client2 = client2;
+            _player1 = player1;
+            _player2 = player2;
+            _spectators = spectators;
             _db = db;
-            _writer1 = new StreamWriter(client1.GetStream()) { AutoFlush = true };
-            _writer2 = new StreamWriter(client2.GetStream()) { AutoFlush = true };
         }
 
         public void Start()
         {
-            AssignPlayers();
+            _player1.Send(new NetworkMessage
+            { Type = MessageType.PlayerAssigned, Payload = "1" });
+            _player2.Send(new NetworkMessage
+            { Type = MessageType.PlayerAssigned, Payload = "2" });
+
             _running = true;
             _state.GameStarted = true;
 
-            new Thread(() => ReceiveInput(_client1, _input1)).Start();
-            new Thread(() => ReceiveInput(_client2, _input2)).Start();
-            new Thread(GameLoop).Start();
+            new Thread(GameLoop) { IsBackground = true }.Start();
         }
 
-        private void AssignPlayers()
+        public void ReceiveInput(ClientHandler client, NetworkMessage msg)
         {
-            Send(_writer1, new NetworkMessage { Type = MessageType.PlayerAssigned, Payload = "1" });
-            Send(_writer2, new NetworkMessage { Type = MessageType.PlayerAssigned, Payload = "2" });
+            var input = JsonConvert.DeserializeObject<PlayerInput>(msg.Payload!);
+            if (input == null) return;
+
+            if (client == _player1)
+            {
+                _input1.Left = input.Left;
+                _input1.Right = input.Right;
+                _input1.Jump = input.Jump;
+                _input1.Kick = input.Kick;
+            }
+            else if (client == _player2)
+            {
+                _input2.Left = input.Left;
+                _input2.Right = input.Right;
+                _input2.Jump = input.Jump;
+                _input2.Kick = input.Kick;
+            }
         }
 
         private void GameLoop()
@@ -62,65 +80,34 @@ namespace HeadFootball.Server
                     lastSecondTick = now;
                 }
 
-                var msg = new NetworkMessage
+                SendAll(new NetworkMessage
                 {
                     Type = MessageType.GameState,
                     Payload = JsonConvert.SerializeObject(_state)
-                };
-                Send(_writer1, msg);
-                Send(_writer2, msg);
+                });
             }
 
             _state.GameOver = true;
-            var endMsg = new NetworkMessage
+            SendAll(new NetworkMessage
             {
                 Type = MessageType.GameOver,
                 Payload = JsonConvert.SerializeObject(_state)
-            };
-            Send(_writer1, endMsg);
-            Send(_writer2, endMsg);
-            // Salvam meciul in baza de date
-            // Deocamdata cu ID-uri hardcodate, le vom lega de login mai tarziu
-            _db.SaveMatch(1, 2, _state.Score1, _state.Score2);
-            Console.WriteLine($"Meci salvat: {_state.Score1} - {_state.Score2}");
+            });
+
+            // Salvam meciul
+            _db.SaveMatch(_player1.UserId, _player2.UserId,
+                          _state.Score1, _state.Score2);
+            Console.WriteLine($"Meci terminat: {_player1.Username} {_state.Score1}" +
+                              $" - {_state.Score2} {_player2.Username}");
+
             _running = false;
-            //Console.WriteLine("Joc terminat.");
         }
 
-        private void ReceiveInput(TcpClient client, PlayerInput input)
+        private void SendAll(NetworkMessage msg)
         {
-            var reader = new StreamReader(client.GetStream());
-            while (_running)
-            {
-                try
-                {
-                    string? line = reader.ReadLine();
-                    if (line == null) break;
-
-                    var msg = JsonConvert.DeserializeObject<NetworkMessage>(line);
-                    if (msg?.Type == MessageType.PlayerInput)
-                    {
-                        var received = JsonConvert.DeserializeObject<PlayerInput>(msg.Payload!);
-                        if (received != null)
-                        {
-                            input.Left = received.Left;
-                            input.Right = received.Right;
-                            input.Jump = received.Jump;
-                            input.Kick = received.Kick;
-                        }
-                    }
-                }
-                catch { break; }
-            }
-        }
-
-        private void Send(StreamWriter writer, NetworkMessage msg)
-        {
-            try
-            {
-                writer.WriteLine(JsonConvert.SerializeObject(msg));
-            }
-            catch { }
+            _player1.Send(msg);
+            _player2.Send(msg);
+            foreach (var s in _spectators) s.Send(msg);
         }
     }
 }
