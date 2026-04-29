@@ -13,12 +13,13 @@ namespace HeadFootball.Server
         private PlayerInput _input1 = new() { PlayerId = 1 };
         private PlayerInput _input2 = new() { PlayerId = 2 };
         private bool _running = false;
+        private readonly Database _db;
 
-        public GameRoom(TcpClient client1, TcpClient client2)
+        public GameRoom(TcpClient client1, TcpClient client2, Database db)
         {
             _client1 = client1;
             _client2 = client2;
-            // StreamWriter-ele se creaza O SINGURA DATA si raman deschise
+            _db = db;
             _writer1 = new StreamWriter(client1.GetStream()) { AutoFlush = true };
             _writer2 = new StreamWriter(client2.GetStream()) { AutoFlush = true };
         }
@@ -78,6 +79,10 @@ namespace HeadFootball.Server
             };
             Send(_writer1, endMsg);
             Send(_writer2, endMsg);
+            // Salvam meciul in baza de date
+            // Deocamdata cu ID-uri hardcodate, le vom lega de login mai tarziu
+            _db.SaveMatch(1, 2, _state.Score1, _state.Score2);
+            Console.WriteLine($"Meci salvat: {_state.Score1} - {_state.Score2}");
             _running = false;
             //Console.WriteLine("Joc terminat.");
         }
