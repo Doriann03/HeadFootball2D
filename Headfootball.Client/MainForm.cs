@@ -45,7 +45,7 @@ namespace Headfootball.Client
 
         private void ConnectToServer()
         {
-            string host = "127.0.0.1"; // schimba cu IP-ul serverului daca e alt PC
+            string host = "10.13.50.153"; // schimba cu IP-ul serverului daca e alt PC
 
             _network.OnPlayerAssigned += id =>
             {
