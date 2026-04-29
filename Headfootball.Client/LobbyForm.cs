@@ -124,7 +124,11 @@ namespace Headfootball.Client
             _btnCreate.Click += (s, e) => _network.SendCreateRoom();
             _btnJoin.Click += OnJoinClick;
             _btnSpectate.Click += OnSpectateClick;
-            _btnStats.Click += (s, e) => _network.RequestStats();
+            _btnStats.Click += (s, e) =>
+            {
+                var statsForm = new StatsForm(_network);
+                statsForm.Show();
+            };
             _btnSend.Click += (s, e) => SendChat();
 
             this.Controls.AddRange(new Control[]
@@ -156,7 +160,6 @@ namespace Headfootball.Client
             _network.OnRoomJoined += OnRoomJoined;
             _network.OnPlayerAssigned += OnPlayerAssigned;
             _network.OnChatReceived += OnChatReceived;
-            _network.OnStatsReceived += OnStatsReceived;
         }
 
         private void OnRoomList(List<RoomInfo> rooms)
@@ -188,9 +191,9 @@ namespace Headfootball.Client
             {
                 _currentRoomId = roomId;
                 string role = asSpectator ? "spectator" : "jucator";
-                _lblStatus.Text = $"Ai intrat in camera {roomId} ca {role}. " +
-                                  $"Asteapta adversarul...";
+                _lblStatus.Text = $"Ai intrat in camera {roomId} ca {role}. Asteapta adversarul...";
                 _lblStatus.ForeColor = Color.LightGreen;
+                Console.WriteLine($"DEBUG OnRoomJoined: roomId setat la '{_currentRoomId}'");
             });
         }
 
@@ -199,8 +202,8 @@ namespace Headfootball.Client
             if (!this.IsHandleCreated) return;
             this.BeginInvoke(() =>
             {
-                // Deschidem jocul
-                var gameForm = new MainForm(_network, playerId);
+                Console.WriteLine($"DEBUG OnPlayerAssigned: roomId este '{_currentRoomId}'");
+                var gameForm = new MainForm(_network, playerId, _currentRoomId);
                 gameForm.Show();
                 this.Hide();
             });
@@ -212,25 +215,6 @@ namespace Headfootball.Client
             this.BeginInvoke(() =>
             {
                 _txtChat.AppendText($"[{chat.Sender}]: {chat.Message}\r\n");
-            });
-        }
-
-        private void OnStatsReceived(StatsPayload? stats)
-        {
-            if (!this.IsHandleCreated) return;
-            this.BeginInvoke(() =>
-            {
-                if (stats == null)
-                {
-                    MessageBox.Show("Nu s-au gasit statistici.", "Stats");
-                    return;
-                }
-                MessageBox.Show(
-                    $"Jucator: {stats.Username}\n" +
-                    $"Rating: {stats.Rating}\n" +
-                    $"Victorii: {stats.Wins} | Egaluri: {stats.Draws} | Infrangeri: {stats.Losses}\n" +
-                    $"Goluri marcate: {stats.GoalsScored} | Goluri primite: {stats.GoalsConceded}",
-                    "Statistici", MessageBoxButtons.OK, MessageBoxIcon.Information);
             });
         }
 

@@ -29,6 +29,10 @@ namespace HeadFootball.Shared
         StatsRequest,
         StatsResponse,
 
+        // Leaderboard
+        LeaderboardRequest,
+        LeaderboardResponse,
+
         // Game-related
         PlayerInput,
         GameState,

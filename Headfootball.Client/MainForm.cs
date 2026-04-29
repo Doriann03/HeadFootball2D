@@ -2,63 +2,57 @@
 
 namespace Headfootball.Client
 {
+    // Panel cu double buffering pentru a elimina licarirea
+    public class GamePanel : Panel
+    {
+        public GamePanel()
+        {
+            this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.OptimizedDoubleBuffer |
+                          ControlStyles.AllPaintingInWmPaint |
+                          ControlStyles.UserPaint, true);
+            this.UpdateStyles();
+        }
+    }
+
     public partial class MainForm : Form
     {
-        private NetworkClient _network = new();
+        private readonly NetworkClient _network;
         private GameRenderer _renderer = new();
         private GameState _state = new();
         private int _playerId = 0;
         private bool _gameOver = false;
+        private string _currentRoomId;
 
         private bool _keyLeft, _keyRight, _keyJump, _keyKick;
 
         private System.Windows.Forms.Timer _renderTimer = new();
         private System.Windows.Forms.Timer _inputTimer = new();
 
-        public MainForm()
-        {
-            //InitializeComponent();
+        private TextBox _txtChatLog = new();
+        private TextBox _txtChatInput = new();
+        private Button _btnSendChat = new();
+        private GamePanel _gamePanel = new();
 
-            this.Text = "Head Football 2D";
-            this.ClientSize = new Size(700, 400);
-            this.FormBorderStyle = FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
-            this.DoubleBuffered = true;
-
-            this.KeyDown += OnKeyDown;
-            this.KeyUp += OnKeyUp;
-            this.KeyPreview = true;
-
-            // Render timer ~60fps
-            _renderTimer.Interval = 16;
-            _renderTimer.Tick += (s, e) => this.Invalidate();
-            _renderTimer.Start();
-
-            // Input timer
-            _inputTimer.Interval = 16;
-            _inputTimer.Tick += SendInput;
-            _inputTimer.Start();
-
-            // Conectare server
-            ConnectToServer();
-        }
-
-        public MainForm(NetworkClient network, int playerId)
+        public MainForm(NetworkClient network, int playerId, string roomId = "")
         {
             _network = network;
             _playerId = playerId;
+            _currentRoomId = roomId;
 
             this.Text = "Head Football 2D";
-            this.ClientSize = new Size(700, 400);
+            this.ClientSize = new Size(900, 420);
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
-            this.DoubleBuffered = true;
             this.KeyDown += OnKeyDown;
             this.KeyUp += OnKeyUp;
             this.KeyPreview = true;
+            this.BackColor = Color.FromArgb(20, 20, 40);
+
+            BuildUI();
 
             _renderTimer.Interval = 16;
-            _renderTimer.Tick += (s, e) => this.Invalidate();
+            _renderTimer.Tick += (s, e) => _gamePanel.Invalidate();
             _renderTimer.Start();
 
             _inputTimer.Interval = 16;
@@ -71,38 +65,144 @@ namespace Headfootball.Client
                 _state = state;
                 _gameOver = true;
                 _inputTimer.Stop();
+                ShowGameOver();
             };
+            _network.OnChatReceived += OnChatReceived;
         }
-        private void ConnectToServer()
+
+        private void BuildUI()
         {
-            string host = "10.13.50.153"; // schimba cu IP-ul serverului daca e alt PC
-
-            _network.OnPlayerAssigned += id =>
+            _gamePanel = new GamePanel
             {
-                _playerId = id;
+                Location = new Point(0, 0),
+                Size = new Size(700, 400),
+                BackColor = Color.Black
+            };
+            _gamePanel.Paint += OnGamePaint;
+            this.Controls.Add(_gamePanel);
+
+            var lblChat = new Label
+            {
+                Text = "💬 Chat",
+                ForeColor = Color.White,
+                Font = new Font("Arial", 10, FontStyle.Bold),
+                Location = new Point(710, 10),
+                Size = new Size(180, 25),
+                BackColor = Color.Transparent
             };
 
-            _network.OnStateReceived += state =>
+            _txtChatLog = new TextBox
             {
-                _state = state;
+                Location = new Point(710, 38),
+                Size = new Size(180, 290),
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                BackColor = Color.FromArgb(30, 30, 50),
+                ForeColor = Color.White,
+                Font = new Font("Consolas", 8),
+                WordWrap = true
             };
 
-            _network.OnGameOver += state =>
+            _txtChatInput = new TextBox
             {
-                _state = state;
-                _gameOver = true;
-                _inputTimer.Stop();
+                Location = new Point(710, 335),
+                Size = new Size(180, 25),
+                BackColor = Color.FromArgb(40, 40, 60),
+                ForeColor = Color.White,
+                Font = new Font("Consolas", 9)
             };
-
-            Task.Run(() =>
+            _txtChatInput.KeyDown += (s, e) =>
             {
-                try { _network.Connect(host, 5000); }
-                catch (Exception ex)
+                if (e.KeyCode == Keys.Enter)
                 {
-                    MessageBox.Show($"Nu ma pot conecta la server!\n{ex.Message}",
-                                    "Eroare", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    e.SuppressKeyPress = true;
+                    SendChat();
+                }
+            };
+
+            _btnSendChat = new Button
+            {
+                Text = "Trimite",
+                Location = new Point(710, 365),
+                Size = new Size(180, 28),
+                BackColor = Color.DodgerBlue,
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Arial", 8, FontStyle.Bold)
+            };
+            _btnSendChat.Click += (s, e) => SendChat();
+
+            var lblControls = new Label
+            {
+                Text = _playerId == 1
+                    ? "🎮 P1: A/D=miscare\nW=saritura\nSpace=sut"
+                    : "🎮 P2: ←/→=miscare\n↑=saritura\nEnter=sut",
+                ForeColor = Color.LightGray,
+                Font = new Font("Arial", 7),
+                Location = new Point(710, 395),
+                Size = new Size(180, 20),
+                BackColor = Color.Transparent
+            };
+
+            this.Controls.AddRange(new Control[]
+            {
+                lblChat, _txtChatLog, _txtChatInput, _btnSendChat, lblControls
+            });
+        }
+
+        private void SendChat()
+        {
+            string msg = _txtChatInput.Text.Trim();
+            if (string.IsNullOrWhiteSpace(msg)) return;
+            // Trimite cu roomId-ul corect — daca e gol folosim "game"
+            _network.SendChat(msg, string.IsNullOrEmpty(_currentRoomId) ? "game" : _currentRoomId); _txtChatInput.Clear();
+            _gamePanel.Focus();
+        }
+
+        private void OnChatReceived(ChatPayload chat)
+        {
+            if (!this.IsHandleCreated) return;
+            this.BeginInvoke(() =>
+            {
+                _txtChatLog.AppendText($"[{chat.Sender}]: {chat.Message}\r\n");
+                // Auto-scroll la ultimul mesaj
+                _txtChatLog.SelectionStart = _txtChatLog.Text.Length;
+                _txtChatLog.ScrollToCaret();
+            });
+        }
+
+        private void ShowGameOver()
+        {
+            if (!this.IsHandleCreated) return;
+            this.BeginInvoke(() =>
+            {
+                string winner = _state.Score1 > _state.Score2 ? "Jucatorul 1 castiga!" :
+                                _state.Score2 > _state.Score1 ? "Jucatorul 2 castiga!" :
+                                "Egalitate!";
+
+                var result = MessageBox.Show(
+                    $"Meci terminat!\n{winner}\nScor: {_state.Score1} - {_state.Score2}\n\nVrei sa te intorci la lobby?",
+                    "Game Over", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+
+                if (result == DialogResult.Yes)
+                {
+                    _renderTimer.Stop();
+                    var lobby = new LobbyForm(_network);
+                    lobby.Show();
+                    this.Close();
                 }
             });
+        }
+
+        private void OnGamePaint(object? sender, PaintEventArgs e)
+        {
+            if (_gameOver)
+                _renderer.DrawGameOver(e.Graphics, _state);
+            else if (!_state.GameStarted)
+                _renderer.DrawWaiting(e.Graphics, _playerId);
+            else
+                _renderer.Draw(e.Graphics, _state, _playerId);
         }
 
         private void SendInput(object? sender, EventArgs e)
@@ -118,20 +218,10 @@ namespace Headfootball.Client
             });
         }
 
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            if (_gameOver)
-                _renderer.DrawGameOver(e.Graphics, _state);
-            else if (!_state.GameStarted)
-                _renderer.DrawWaiting(e.Graphics, _playerId);
-            else
-                _renderer.Draw(e.Graphics, _state, _playerId);
-        }
-
         private void OnKeyDown(object? sender, KeyEventArgs e)
         {
-            // Jucator 1: WASD + Space
-            // Jucator 2: Sageti + Enter
+            if (_txtChatInput.Focused) return;
+
             if (_playerId == 1)
             {
                 if (e.KeyCode == Keys.A) _keyLeft = true;
