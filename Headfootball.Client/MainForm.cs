@@ -2,7 +2,6 @@
 
 namespace Headfootball.Client
 {
-    // Panel cu double buffering pentru a elimina licarirea
     public class GamePanel : Panel
     {
         public GamePanel()
@@ -12,6 +11,22 @@ namespace Headfootball.Client
                           ControlStyles.AllPaintingInWmPaint |
                           ControlStyles.UserPaint, true);
             this.UpdateStyles();
+        }
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            // Spune WinForms sa trateze sagetile si Enter ca input normal
+            switch (keyData)
+            {
+                case Keys.Left:
+                case Keys.Right:
+                case Keys.Up:
+                case Keys.Down:
+                case Keys.Enter:
+                case Keys.Space:
+                    return true;
+            }
+            return base.IsInputKey(keyData);
         }
     }
 
@@ -44,9 +59,9 @@ namespace Headfootball.Client
             this.ClientSize = new Size(900, 420);
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
+            this.KeyPreview = true;
             this.KeyDown += OnKeyDown;
             this.KeyUp += OnKeyUp;
-            this.KeyPreview = true;
             this.BackColor = Color.FromArgb(20, 20, 40);
 
             BuildUI();
@@ -68,6 +83,9 @@ namespace Headfootball.Client
                 ShowGameOver();
             };
             _network.OnChatReceived += OnChatReceived;
+
+            // Dupa ce s-a construit UI, dam focus pe gamePanel
+            this.Shown += (s, e) => _gamePanel.Focus();
         }
 
         private void BuildUI()
@@ -76,9 +94,13 @@ namespace Headfootball.Client
             {
                 Location = new Point(0, 0),
                 Size = new Size(700, 400),
-                BackColor = Color.Black
+                BackColor = Color.Black,
+                TabStop = true
             };
             _gamePanel.Paint += OnGamePaint;
+            _gamePanel.KeyDown += OnKeyDown;
+            _gamePanel.KeyUp += OnKeyUp;
+            _gamePanel.MouseClick += (s, e) => _gamePanel.Focus();
             this.Controls.Add(_gamePanel);
 
             var lblChat = new Label
@@ -117,6 +139,7 @@ namespace Headfootball.Client
                 if (e.KeyCode == Keys.Enter)
                 {
                     e.SuppressKeyPress = true;
+                    e.Handled = true;
                     SendChat();
                 }
             };
@@ -133,11 +156,13 @@ namespace Headfootball.Client
             };
             _btnSendChat.Click += (s, e) => SendChat();
 
+            string controlsText = "👁 MOD SPECTATOR - Doar privești";
+            if (_playerId == 1) controlsText = "🎮 P1: A/D=miscare\nW=saritura\nSpace=sut";
+            else if (_playerId == 2) controlsText = "🎮 P2: ←/→=miscare\n↑=saritura\nEnter=sut";
+
             var lblControls = new Label
             {
-                Text = _playerId == 1
-                    ? "🎮 P1: A/D=miscare\nW=saritura\nSpace=sut"
-                    : "🎮 P2: ←/→=miscare\n↑=saritura\nEnter=sut",
+                Text = controlsText,
                 ForeColor = Color.LightGray,
                 Font = new Font("Arial", 7),
                 Location = new Point(710, 395),
@@ -155,8 +180,8 @@ namespace Headfootball.Client
         {
             string msg = _txtChatInput.Text.Trim();
             if (string.IsNullOrWhiteSpace(msg)) return;
-            // Trimite cu roomId-ul corect — daca e gol folosim "game"
-            _network.SendChat(msg, string.IsNullOrEmpty(_currentRoomId) ? "game" : _currentRoomId); _txtChatInput.Clear();
+            _network.SendChat(msg, string.IsNullOrEmpty(_currentRoomId) ? "game" : _currentRoomId);
+            _txtChatInput.Clear();
             _gamePanel.Focus();
         }
 
@@ -166,7 +191,6 @@ namespace Headfootball.Client
             this.BeginInvoke(() =>
             {
                 _txtChatLog.AppendText($"[{chat.Sender}]: {chat.Message}\r\n");
-                // Auto-scroll la ultimul mesaj
                 _txtChatLog.SelectionStart = _txtChatLog.Text.Length;
                 _txtChatLog.ScrollToCaret();
             });
@@ -203,6 +227,14 @@ namespace Headfootball.Client
                 _renderer.DrawWaiting(e.Graphics, _playerId);
             else
                 _renderer.Draw(e.Graphics, _state, _playerId);
+
+            // Dacă ești spectator, afișăm un badge subtil pe ecran în timpul meciului
+            if (_playerId == 0 && _state.GameStarted && !_gameOver)
+            {
+                using var font = new Font("Arial", 12, FontStyle.Bold);
+                using var brush = new SolidBrush(Color.FromArgb(150, 255, 255, 0)); // Galben semi-transparent
+                e.Graphics.DrawString("👁 SPECTATOR", font, brush, 10, 10);
+            }
         }
 
         private void SendInput(object? sender, EventArgs e)
@@ -224,17 +256,17 @@ namespace Headfootball.Client
 
             if (_playerId == 1)
             {
-                if (e.KeyCode == Keys.A) _keyLeft = true;
-                if (e.KeyCode == Keys.D) _keyRight = true;
-                if (e.KeyCode == Keys.W) _keyJump = true;
-                if (e.KeyCode == Keys.Space) _keyKick = true;
+                if (e.KeyCode == Keys.A) { _keyLeft = true; e.Handled = true; }
+                if (e.KeyCode == Keys.D) { _keyRight = true; e.Handled = true; }
+                if (e.KeyCode == Keys.W) { _keyJump = true; e.Handled = true; }
+                if (e.KeyCode == Keys.Space) { _keyKick = true; e.Handled = true; }
             }
-            else
+            else if (_playerId == 2)
             {
-                if (e.KeyCode == Keys.Left) _keyLeft = true;
-                if (e.KeyCode == Keys.Right) _keyRight = true;
-                if (e.KeyCode == Keys.Up) _keyJump = true;
-                if (e.KeyCode == Keys.Enter) _keyKick = true;
+                if (e.KeyCode == Keys.Left) { _keyLeft = true; e.Handled = true; }
+                if (e.KeyCode == Keys.Right) { _keyRight = true; e.Handled = true; }
+                if (e.KeyCode == Keys.Up) { _keyJump = true; e.Handled = true; }
+                if (e.KeyCode == Keys.Enter) { _keyKick = true; e.Handled = true; }
             }
         }
 
@@ -247,7 +279,7 @@ namespace Headfootball.Client
                 if (e.KeyCode == Keys.W) _keyJump = false;
                 if (e.KeyCode == Keys.Space) _keyKick = false;
             }
-            else
+            else if (_playerId == 2)
             {
                 if (e.KeyCode == Keys.Left) _keyLeft = false;
                 if (e.KeyCode == Keys.Right) _keyRight = false;

@@ -13,6 +13,9 @@ namespace HeadFootball.Server
         public bool InProgress => Game != null;
 
         public int PlayerCount => (Player1 != null ? 1 : 0) + (Player2 != null ? 1 : 0);
+
+        // Timer pentru a decide cand bagam botul
+        public DateTime CreatedAt { get; } = DateTime.Now;
     }
 
     public class LobbyManager
@@ -25,6 +28,33 @@ namespace HeadFootball.Server
         public LobbyManager(Database db)
         {
             _db = db;
+
+            // Pormim un thread care verifica camerele la fiecare secunda
+            new Thread(CheckRoomsForBot) { IsBackground = true }.Start();
+        }
+
+        private void CheckRoomsForBot()
+        {
+            while (true)
+            {
+                Thread.Sleep(1000);
+
+                lock (_lock)
+                {
+                    foreach (var room in _rooms)
+                    {
+                        // Daca jocul nu a inceput si a trecut timpul (10 secunde)...
+                        if (!room.InProgress && room.Player1 != null && room.Player2 == null)
+                        {
+                            if ((DateTime.Now - room.CreatedAt).TotalSeconds > 10)
+                            {
+                                Console.WriteLine($"Au trecut 10 secunde in camera {room.RoomId}. Bagam BOT-ul!");
+                                StartGame(room);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         public void AddClient(ClientHandler client)
@@ -49,13 +79,15 @@ namespace HeadFootball.Server
                     if (room.Player2 == client) room.Player2 = null;
                     room.Spectators.Remove(client);
 
-                    // Stergem camera daca e goala
+                    // Stergem camera daca e goala (niciun jucator si nici joc pornit cu bot)
                     if (room.Player1 == null && room.Player2 == null
-                        && room.Spectators.Count == 0)
+                        && room.Spectators.Count == 0 && !room.InProgress)
                     {
                         _rooms.Remove(room);
                         Console.WriteLine($"Camera {room.RoomId} stearsa.");
                     }
+                    // Daca jocul e in curs si P1 sau P2 iese, teoretic meciul ar trebui sa se termine.
+                    // Asta e o functionalitate ce o puteti gestiona in GameRoom.
                 }
 
                 BroadcastRoomList();
@@ -113,7 +145,7 @@ namespace HeadFootball.Server
                 }
                 else
                 {
-                    if (room.Player2 != null)
+                    if (room.Player2 != null || room.InProgress)
                     {
                         client.Send(new NetworkMessage
                         {
@@ -121,7 +153,7 @@ namespace HeadFootball.Server
                             Payload = JsonConvert.SerializeObject(new LoginResultPayload
                             {
                                 Success = false,
-                                Message = "Camera este plina."
+                                Message = "Camera este plina sau in curs."
                             })
                         });
                         return;
@@ -143,7 +175,7 @@ namespace HeadFootball.Server
 
                 BroadcastRoomList();
 
-                // Daca sunt 2 jucatori, pornim jocul
+                // Daca sunt 2 jucatori (reali), pornim jocul
                 if (room.Player1 != null && room.Player2 != null && !room.InProgress)
                     StartGame(room);
             }
@@ -155,13 +187,16 @@ namespace HeadFootball.Server
 
             var game = new GameRoom(
                 room.Player1!,
-                room.Player2!,
+                room.Player2, // Poate fi null cand porneste botul
                 room.Spectators,
                 _db
             );
 
             room.Game = game;
             game.Start();
+
+            // Anuntam din nou in lobby ca meciul a inceput
+            BroadcastRoomList();
         }
 
         public void ForwardInput(ClientHandler client, NetworkMessage msg)

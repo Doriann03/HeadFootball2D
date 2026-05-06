@@ -206,32 +206,39 @@ namespace HeadFootball.Server
         public List<StatsPayload> GetLeaderboard()
         {
             var result = new List<StatsPayload>();
-            using var conn = new SqliteConnection(_connectionString);
-            conn.Open();
-
-            var cmd = conn.CreateCommand();
-            cmd.CommandText = @"
-                SELECT u.username, u.rating, s.wins, s.losses, s.draws,
-                       s.goals_scored, s.goals_conceded
-                FROM users u
-                JOIN stats s ON u.id = s.user_id
-                ORDER BY u.rating DESC
-                LIMIT 10
-            ";
-
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
+            try
             {
-                result.Add(new StatsPayload
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+
+                var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT u.username, u.rating, s.wins, s.losses, s.draws,
+                           s.goals_scored, s.goals_conceded
+                    FROM users u
+                    JOIN stats s ON u.id = s.user_id
+                    ORDER BY u.rating DESC
+                    LIMIT 10
+                ";
+
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
                 {
-                    Username = reader.GetString(0),
-                    Rating = reader.GetInt32(1),
-                    Wins = reader.GetInt32(2),
-                    Losses = reader.GetInt32(3),
-                    Draws = reader.GetInt32(4),
-                    GoalsScored = reader.GetInt32(5),
-                    GoalsConceded = reader.GetInt32(6)
-                });
+                    result.Add(new StatsPayload
+                    {
+                        Username = reader.GetString(0),
+                        Rating = reader.GetInt32(1),
+                        Wins = reader.GetInt32(2),
+                        Losses = reader.GetInt32(3),
+                        Draws = reader.GetInt32(4),
+                        GoalsScored = reader.GetInt32(5),
+                        GoalsConceded = reader.GetInt32(6)
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Eroare GetLeaderboard: {ex.Message}");
             }
             return result;
         }

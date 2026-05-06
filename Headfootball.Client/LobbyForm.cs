@@ -190,10 +190,21 @@ namespace Headfootball.Client
             this.BeginInvoke(() =>
             {
                 _currentRoomId = roomId;
-                string role = asSpectator ? "spectator" : "jucator";
-                _lblStatus.Text = $"Ai intrat in camera {roomId} ca {role}. Asteapta adversarul...";
-                _lblStatus.ForeColor = Color.LightGreen;
-                Console.WriteLine($"DEBUG OnRoomJoined: roomId setat la '{_currentRoomId}'");
+
+                if (asSpectator)
+                {
+                    // Spectatorul sare peste faza de Assigned, îl băgăm direct în meci cu ID 0
+                    Console.WriteLine($"DEBUG: Intru ca spectator in camera '{_currentRoomId}'");
+                    var gameForm = new MainForm(_network, 0, _currentRoomId);
+                    gameForm.Show();
+                    this.Hide();
+                }
+                else
+                {
+                    _lblStatus.Text = $"Ai intrat in camera {roomId} ca jucator. Asteapta adversarul...";
+                    _lblStatus.ForeColor = Color.LightGreen;
+                    Console.WriteLine($"DEBUG OnRoomJoined: roomId setat la '{_currentRoomId}'");
+                }
             });
         }
 

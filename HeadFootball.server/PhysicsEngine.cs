@@ -1,4 +1,4 @@
-﻿using HeadFootball.Shared;
+using HeadFootball.Shared;
 
 namespace HeadFootball.Server
 {
@@ -36,29 +36,41 @@ namespace HeadFootball.Server
         private float _prevBallX = FieldWidth / 2;
         private float _prevBallY = FieldHeight / 2;
 
-        // Returns: 0 = no goal, 1 = player1 scored, 2 = player2 scored
-        public int Update(GameState state, PlayerInput input1, PlayerInput input2)
+        private Random _rng = new();
+
+        // Schimbat din 'int' in 'void'. Lăsăm doar GameRoom să apeleze CheckGoal!
+        public void Update(GameState state, PlayerInput input1, PlayerInput input2)
         {
             state.Player1Kicking = input1.Kick;
             state.Player2Kicking = input2.Kick;
-            MovePlayer(ref state.Player1X, ref state.Player1Y, ref _vel1Y, input1, true);
-            MovePlayer(ref state.Player2X, ref state.Player2Y, ref _vel2Y, input2, false);
+
+            // Calculam viteza si saritura luand in calcul power-up-urile!
+            float speed1 = state.Player1ActivePowerUp == 1 ? PlayerSpeed * 1.6f : PlayerSpeed;
+            float speed2 = state.Player2ActivePowerUp == 1 ? PlayerSpeed * 1.6f : PlayerSpeed;
+
+            float jump1 = state.Player1ActivePowerUp == 2 ? JumpForce * 1.4f : JumpForce;
+            float jump2 = state.Player2ActivePowerUp == 2 ? JumpForce * 1.4f : JumpForce;
+
+            MovePlayer(ref state.Player1X, ref state.Player1Y, ref _vel1Y, input1, speed1, jump1);
+            MovePlayer(ref state.Player2X, ref state.Player2Y, ref _vel2Y, input2, speed2, jump2);
+
             UpdateBall(state, input1, input2);
 
-            // Check goal immediately and return scorer
-            return CheckGoal(state);
+            // Gestionare Power-Up-uri
+            UpdatePowerUpTimers(state);
+            CheckPowerUpCollision(state);
         }
 
         private void MovePlayer(ref float x, ref float y, ref float velY,
-                                 PlayerInput input, bool isPlayer1)
+                                 PlayerInput input, float currentSpeed, float currentJumpForce)
         {
             // Miscare orizontala
-            if (input.Left) x -= PlayerSpeed;
-            if (input.Right) x += PlayerSpeed;
+            if (input.Left) x -= currentSpeed;
+            if (input.Right) x += currentSpeed;
 
             // Saritura
             if (input.Jump && y >= GroundY - PlayerHeight)
-                velY = JumpForce;
+                velY = currentJumpForce;
 
             // Gravitatie
             velY += Gravity;
@@ -72,7 +84,6 @@ namespace HeadFootball.Server
             }
 
             // Margini teren
-            // Permitem jucatorilor sa treaca in jumatatea adversa, doar nu sa iasa din teren
             float minX = GoalWidth;
             float maxX = FieldWidth - GoalWidth - PlayerWidth;
             x = Math.Clamp(x, minX, maxX);
@@ -80,39 +91,30 @@ namespace HeadFootball.Server
 
         private void UpdateBall(GameState state, PlayerInput input1, PlayerInput input2)
         {
-            // Stocam pozitia precedenta pentru detectii continue
             _prevBallX = state.BallX;
             _prevBallY = state.BallY;
 
-            // Gravitatie minge
             _velBallY += BallGravity;
             _velBallX *= BallFriction;
 
             state.BallX += _velBallX;
             state.BallY += _velBallY;
-            // Continuous check: did the ball's leading edge cross the goal line this frame?
-            // This prevents tunneling and false non-goals.
-            // Left goal
+
             float prevLeftLead = _prevBallX + BallRadius;
             float currLeftLead = state.BallX + BallRadius;
             if (prevLeftLead > GoalWidth && currLeftLead <= GoalWidth)
             {
-                // compute interpolation factor t where leading edge hits the line
                 float denom = prevLeftLead - currLeftLead;
                 float t = denom != 0 ? (prevLeftLead - GoalWidth) / denom : 0f;
                 float yAtCross = _prevBallY + (state.BallY - _prevBallY) * t;
-                // check vertical position at crossing: under crossbar and above ground
                 if (yAtCross - BallRadius >= GoalY && yAtCross + BallRadius <= GroundY)
                 {
-                    // place ball clearly inside goal so CheckGoal will detect it
                     state.BallX = GoalWidth - BallRadius - 1f;
                     state.BallY = Math.Clamp(yAtCross, GoalY + BallRadius, GroundY - BallRadius);
-                    // skip further collision handling this frame
                     return;
                 }
             }
 
-            // Right goal
             float prevRightLead = _prevBallX - BallRadius;
             float currRightLead = state.BallX - BallRadius;
             if (prevRightLead < FieldWidth - GoalWidth && currRightLead >= FieldWidth - GoalWidth)
@@ -127,10 +129,7 @@ namespace HeadFootball.Server
                     return;
                 }
             }
-            // Verificam daca mingea este deja in interiorul porii (gol potential)
-            // Folosim criteriu simplu si robust: mingea e considerata in poarta daca
-            // - partea ei dinspre linia porții a trecut complet linia porții (BallX +/- BallRadius past line)
-            // - mingea este sub bara transversala si deasupra terenului
+
             bool inLeftGoalArea = state.BallX + BallRadius <= GoalWidth
                                    && state.BallY - BallRadius >= GoalY
                                    && state.BallY + BallRadius <= GroundY;
@@ -138,19 +137,11 @@ namespace HeadFootball.Server
                                    && state.BallY - BallRadius >= GoalY
                                    && state.BallY + BallRadius <= GroundY;
 
-            // Coliziune cu barele portilor (posturi si bara transversala)
-            // Daca mingea e complet in interiorul portii, nu face ricoseu pe cadrul porții — va fi considerat gol
             if (!inLeftGoalArea && !inRightGoalArea)
             {
-            // Vertical posts are non-solid now: do not reflect the ball on side posts so the ball
-            // can enter the goal area and touch the net. We only keep the horizontal crossbar collision below.
-
-                // Bara transversala (top crossbar) - doar daca mingea a penetrat bariera in acest frame
-                // (prevenim "teleport" cand mingea este deja in interiorul porții sau atinge o zona de sus)
                 float prevTop = _prevBallY - BallRadius;
                 float currTop = state.BallY - BallRadius;
 
-                // Stanga: detectam patrunderea de sus in jos
                 if (prevTop <= GoalY && currTop > GoalY &&
                     state.BallX >= 0 && state.BallX <= GoalWidth)
                 {
@@ -158,7 +149,6 @@ namespace HeadFootball.Server
                     _velBallY *= -0.6f;
                 }
 
-                // Dreapta
                 if (prevTop <= GoalY && currTop > GoalY &&
                     state.BallX >= FieldWidth - GoalWidth && state.BallX <= FieldWidth)
                 {
@@ -167,8 +157,6 @@ namespace HeadFootball.Server
                 }
             }
 
-
-            // Sol
             if (state.BallY >= GroundY - BallRadius)
             {
                 state.BallY = GroundY - BallRadius;
@@ -176,107 +164,152 @@ namespace HeadFootball.Server
                 _velBallX *= 0.85f;
             }
 
-            // Margini laterale
             if (state.BallX <= BallRadius) { state.BallX = BallRadius; _velBallX *= -0.8f; }
             if (state.BallX >= FieldWidth - BallRadius) { state.BallX = FieldWidth - BallRadius; _velBallX *= -0.8f; }
 
-            // Tavan
             if (state.BallY <= BallRadius) { state.BallY = BallRadius; _velBallY *= -0.6f; }
 
-            // Coliziune cu jucatorul 1
+            // Coliziune cu jucatorii
             CheckPlayerBallCollision(state.Player1X, state.Player1Y, ref state.BallX,
-                ref state.BallY, input1.Kick, 1);
+                ref state.BallY, input1.Kick, 1, BallRadius * state.BallScale);
 
-            // Coliziune cu jucatorul 2
             CheckPlayerBallCollision(state.Player2X, state.Player2Y, ref state.BallX,
-                ref state.BallY, input2.Kick, -1);
+                ref state.BallY, input2.Kick, -1, BallRadius * state.BallScale);
         }
 
         private void CheckPlayerBallCollision(float px, float py, ref float bx, ref float by,
-                                               bool kick, float kickDir)
+                                               bool kick, float kickDir, float radius)
         {
-            // Prima verifica: piciorul (solid) — piciorul este plasat in fata jucatorului
-            bool isPlayer1 = kickDir > 0;
-            float footOffsetX = PlayerWidth * 0.75f; // piciorul este aproape de marginea din fata
-            float footCenterX = px + (isPlayer1 ? footOffsetX : PlayerWidth - footOffsetX);
-            float footCenterY = py + PlayerHeight - 10; // aproape de sol
-            float footRadius = 24f; // mai mare, solid
-
-            float fdx = bx - footCenterX;
-            float fdy = by - footCenterY;
-            float fdist = (float)Math.Sqrt(fdx * fdx + fdy * fdy);
-
-            if (fdist < BallRadius + footRadius)
-            {
-                float nx = fdx / fdist;
-                float ny = fdy / fdist;
-
-                // Coliziune cu piciorul: daca este sut, impuls mai mare si arc in sus
-                if (kick)
-                {
-                    _velBallX = nx * 14f + kickDir * 5f;
-                    _velBallY = ny * 8f - 10f;
-                }
-                else
-                {
-                    // atingere normala - mica schimbare de directie
-                    _velBallX = nx * 6f + kickDir * 1.5f;
-                    _velBallY = ny * 4f - 2f;
-                }
-
-                bx = footCenterX + nx * (BallRadius + footRadius + 1);
-                by = footCenterY + ny * (BallRadius + footRadius + 1);
-
-                return; // deja procesata coliziunea cu piciorul
-            }
-
-            // Daca nu a lovit piciorul, verificam coliziunea generala cu corpul/capul jucatorului (mai sus)
             float centerX = px + PlayerWidth / 2;
-            float centerY = py + PlayerHeight / 4; // capul e sus
-
+            float centerY = py + PlayerHeight / 4;
             float dx = bx - centerX;
             float dy = by - centerY;
             float dist = (float)Math.Sqrt(dx * dx + dy * dy);
 
-            if (dist < BallRadius + PlayerWidth / 2)
+            float bodyRadius = radius + PlayerWidth / 2;
+            float interactionRadius = bodyRadius + (kick ? 25f : 0f);
+
+            if (dist < interactionRadius)
             {
                 float nx = dx / dist;
                 float ny = dy / dist;
 
-                // When kicking, give the ball a stronger forward push and a noticeable upward arc
-                _velBallX = nx * (kick ? 12f : 6f) + kickDir * (kick ? 4f : 0);
-                _velBallY = ny * 6f + (kick ? -8f : 0);
+                if (!kick)
+                {
+                    _velBallX = nx * 6f;
+                    _velBallY = ny * 6f;
 
-                bx = centerX + nx * (BallRadius + PlayerWidth / 2 + 1);
-                by = centerY + ny * (BallRadius + PlayerWidth / 2 + 1);
+                    bx = centerX + nx * (bodyRadius + 1);
+                    by = centerY + ny * (bodyRadius + 1);
+                }
+                else
+                {
+                    _velBallX = (nx * 8f) + (kickDir * 8f);
+                    _velBallY = (ny * 4f) - 8f;
+
+                    if (dist < bodyRadius)
+                    {
+                        bx = centerX + nx * (bodyRadius + 1);
+                        by = centerY + ny * (bodyRadius + 1);
+                    }
+                }
             }
         }
 
         public int CheckGoal(GameState state)
         {
-            // Gol doar daca mingea a intrat efectiv in poarta (toata mingea in interiorul zonei portii)
-            // Folosim acelasi criteriu ca in UpdateBall: partea mingii orientata spre linia porții
-            // trebuie sa treaca complet linia porții, si mingea trebuie sa fie sub bara transversala
-            bool inLeftGoalArea = state.BallX + BallRadius <= GoalWidth
-                                   && state.BallY - BallRadius >= GoalY
-                                   && state.BallY + BallRadius <= GroundY;
-            bool inRightGoalArea = state.BallX - BallRadius >= FieldWidth - GoalWidth
-                                   && state.BallY - BallRadius >= GoalY
-                                   && state.BallY + BallRadius <= GroundY;
+            float radius = BallRadius * state.BallScale;
+            bool isInGoalHeight = state.BallY >= (GroundY - GoalHeight);
 
-            if (inLeftGoalArea)
+            if (isInGoalHeight && (state.BallX - radius <= GoalWidth))
             {
+                int goals = state.Player2ActivePowerUp == 4 ? 2 : 1;
                 ResetBall(state);
-                return 2;
+                SpawnPowerUp(state);
+                return 20 + goals;
             }
 
-            if (inRightGoalArea)
+            if (isInGoalHeight && (state.BallX + radius >= FieldWidth - GoalWidth))
             {
+                int goals = state.Player1ActivePowerUp == 4 ? 2 : 1;
                 ResetBall(state);
-                return 1;
+                SpawnPowerUp(state);
+                return 10 + goals;
             }
 
             return 0;
+        }
+
+        private void CheckPowerUpCollision(GameState state)
+        {
+            if (!state.PowerUpVisible) return;
+            float pwSize = 25;
+
+            // Player 1
+            if (state.Player1X < state.PowerUpX + pwSize && state.Player1X + PlayerWidth > state.PowerUpX &&
+                state.Player1Y < state.PowerUpY + pwSize && state.Player1Y + PlayerHeight > state.PowerUpY)
+            {
+                ApplyPowerUp(state, 1, state.PowerUpType);
+                state.PowerUpVisible = false;
+            }
+            // Player 2
+            else if (state.Player2X < state.PowerUpX + pwSize && state.Player2X + PlayerWidth > state.PowerUpX &&
+                     state.Player2Y < state.PowerUpY + pwSize && state.Player2Y + PlayerHeight > state.PowerUpY)
+            {
+                ApplyPowerUp(state, 2, state.PowerUpType);
+                state.PowerUpVisible = false;
+            }
+        }
+
+        private void ApplyPowerUp(GameState state, int player, int type)
+        {
+            // type 1 = viteza, 2 = saritura, 3 = minge marita, 4 = gol dublu
+            int duration = 300; // ~5 secunde la 60fps pentru Viteza si Saritura
+
+            if (type == 3) // Minge mare/mica schimba mingea instant
+            {
+                state.BallScale = _rng.Next(0, 2) == 0 ? 1.8f : 0.5f;
+                return;
+            }
+
+            // Pentru Gol Dublu, punem timer infinit (se va reseta automat cand cineva da gol datorita metodei ResetBall)
+            if (type == 4)
+            {
+                duration = 999999;
+            }
+
+            if (player == 1)
+            {
+                state.Player1ActivePowerUp = type;
+                state.Player1PowerUpTimer = duration;
+            }
+            else
+            {
+                state.Player2ActivePowerUp = type;
+                state.Player2PowerUpTimer = duration;
+            }
+        }
+
+        private void UpdatePowerUpTimers(GameState state)
+        {
+            if (state.Player1PowerUpTimer > 0)
+            {
+                state.Player1PowerUpTimer--;
+                if (state.Player1PowerUpTimer <= 0) state.Player1ActivePowerUp = 0;
+            }
+            if (state.Player2PowerUpTimer > 0)
+            {
+                state.Player2PowerUpTimer--;
+                if (state.Player2PowerUpTimer <= 0) state.Player2ActivePowerUp = 0;
+            }
+        }
+
+        private void SpawnPowerUp(GameState state)
+        {
+            state.PowerUpVisible = true;
+            state.PowerUpX = _rng.Next(100, 600);
+            state.PowerUpY = _rng.Next(150, 280);
+            state.PowerUpType = _rng.Next(1, 5);
         }
 
         private void ResetBall(GameState state)
@@ -285,6 +318,13 @@ namespace HeadFootball.Server
             state.BallY = FieldHeight / 2;
             _velBallX = 0;
             _velBallY = 0;
+
+            // Resetam și efectele cand se da un gol
+            state.BallScale = 1.0f;
+            state.Player1ActivePowerUp = 0;
+            state.Player2ActivePowerUp = 0;
+            state.Player1PowerUpTimer = 0;
+            state.Player2PowerUpTimer = 0;
         }
     }
 }

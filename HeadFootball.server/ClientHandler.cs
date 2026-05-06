@@ -85,6 +85,20 @@ namespace HeadFootball.Server
                     HandleStatsRequest();
                     break;
 
+                // ---- AICI ESTE CODUL NOU PENTRU LEADERBOARD ----
+                case MessageType.LeaderboardRequest:
+                    if (IsAuthenticated)
+                    {
+                        var leaderboard = _db.GetLeaderboard();
+                        Send(new NetworkMessage
+                        {
+                            Type = MessageType.LeaderboardResponse,
+                            Payload = JsonConvert.SerializeObject(leaderboard)
+                        });
+                    }
+                    break;
+                // ------------------------------------------------
+
                 case MessageType.ChatMessage:
                     if (IsAuthenticated)
                     {
