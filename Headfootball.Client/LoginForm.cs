@@ -160,5 +160,11 @@ namespace Headfootball.Client
                 }
             });
         }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+            Application.Exit(); // Oprește complet toate procesele clientului
+        }
     }
 }

@@ -25,6 +25,7 @@ namespace Headfootball.Client
         public void Connect(string host, int port)
         {
             _client.Connect(host, port);
+            _client.NoDelay = true;
             _writer = new StreamWriter(_client.GetStream()) { AutoFlush = true };
             _reader = new StreamReader(_client.GetStream());
             new Thread(ReceiveLoop) { IsBackground = true }.Start();

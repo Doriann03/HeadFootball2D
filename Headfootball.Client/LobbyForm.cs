@@ -262,5 +262,11 @@ namespace Headfootball.Client
             _network.SendChat(_txtChatInput.Text.Trim(), "lobby");
             _txtChatInput.Clear();
         }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+            Application.Exit(); // Oprește complet toate procesele clientului
+        }
     }
 }

@@ -38,6 +38,7 @@ namespace Headfootball.Client
         private int _playerId = 0;
         private bool _gameOver = false;
         private string _currentRoomId;
+        private bool _isSwitchingForm = false;
 
         private bool _keyLeft, _keyRight, _keyJump, _keyKick;
 
@@ -66,7 +67,7 @@ namespace Headfootball.Client
 
             BuildUI();
 
-            _renderTimer.Interval = 16;
+            _renderTimer.Interval = 30;
             _renderTimer.Tick += (s, e) => _gamePanel.Invalidate();
             _renderTimer.Start();
 
@@ -214,6 +215,7 @@ namespace Headfootball.Client
                     _renderTimer.Stop();
                     var lobby = new LobbyForm(_network);
                     lobby.Show();
+                    _isSwitchingForm = true;
                     this.Close();
                 }
             });
@@ -285,6 +287,15 @@ namespace Headfootball.Client
                 if (e.KeyCode == Keys.Right) _keyRight = false;
                 if (e.KeyCode == Keys.Up) _keyJump = false;
                 if (e.KeyCode == Keys.Enter) _keyKick = false;
+            }
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+            if (!_isSwitchingForm) // Dacă NU schimbăm fereastra, închidem tot
+            {
+                Application.Exit();
             }
         }
     }

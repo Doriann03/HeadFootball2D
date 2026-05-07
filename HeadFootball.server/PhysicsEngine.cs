@@ -10,8 +10,8 @@ namespace HeadFootball.Server
         public const float GroundY = 330;
 
         // Porti (marite)
-        public const float GoalWidth = 40;
-        public const float GoalHeight = 120;
+        public const float GoalWidth = 50;
+        public const float GoalHeight = 160;
         // Grosimea ramei porții (posturi + bara transversala)
         public const float GoalFrame = 6f;
         // Aliniem GoalY cu GroundY - GoalHeight pentru consistenta cu renderer
@@ -91,90 +91,102 @@ namespace HeadFootball.Server
 
         private void UpdateBall(GameState state, PlayerInput input1, PlayerInput input2)
         {
-            _prevBallX = state.BallX;
-            _prevBallY = state.BallY;
+            float _prevBallY = state.BallY;
+            float scaledRadius = BallRadius * state.BallScale;
 
+            // Aplicăm gravitația și frecarea
             _velBallY += BallGravity;
             _velBallX *= BallFriction;
-
             state.BallX += _velBallX;
             state.BallY += _velBallY;
 
-            float prevLeftLead = _prevBallX + BallRadius;
-            float currLeftLead = state.BallX + BallRadius;
-            if (prevLeftLead > GoalWidth && currLeftLead <= GoalWidth)
+            // --- 1. COLIZIUNE CU COLȚURILE BAREI (Suturi în bară din față) ---
+            // Colțul porții stângi
+            float distLeftX = state.BallX - GoalWidth;
+            float distLeftY = state.BallY - GoalY;
+            float distLeft = (float)Math.Sqrt(distLeftX * distLeftX + distLeftY * distLeftY);
+            if (distLeft < scaledRadius)
             {
-                float denom = prevLeftLead - currLeftLead;
-                float t = denom != 0 ? (prevLeftLead - GoalWidth) / denom : 0f;
-                float yAtCross = _prevBallY + (state.BallY - _prevBallY) * t;
-                if (yAtCross - BallRadius >= GoalY && yAtCross + BallRadius <= GroundY)
-                {
-                    state.BallX = GoalWidth - BallRadius - 1f;
-                    state.BallY = Math.Clamp(yAtCross, GoalY + BallRadius, GroundY - BallRadius);
-                    return;
-                }
+                float nx = distLeftX / distLeft;
+                float ny = distLeftY / distLeft;
+                state.BallX = GoalWidth + nx * scaledRadius;
+                state.BallY = GoalY + ny * scaledRadius;
+
+                // Ricoșeu fizic
+                float dot = _velBallX * nx + _velBallY * ny;
+                _velBallX = (_velBallX - 2 * dot * nx) * 0.8f;
+                _velBallY = (_velBallY - 2 * dot * ny) * 0.8f;
             }
 
-            float prevRightLead = _prevBallX - BallRadius;
-            float currRightLead = state.BallX - BallRadius;
-            if (prevRightLead < FieldWidth - GoalWidth && currRightLead >= FieldWidth - GoalWidth)
+            // Colțul porții drepte
+            float rightGoalX = FieldWidth - GoalWidth;
+            float distRightX = state.BallX - rightGoalX;
+            float distRightY = state.BallY - GoalY;
+            float distRight = (float)Math.Sqrt(distRightX * distRightX + distRightY * distRightY);
+            if (distRight < scaledRadius)
             {
-                float denom = currRightLead - prevRightLead;
-                float t = denom != 0 ? (FieldWidth - GoalWidth - prevRightLead) / denom : 0f;
-                float yAtCross = _prevBallY + (state.BallY - _prevBallY) * t;
-                if (yAtCross - BallRadius >= GoalY && yAtCross + BallRadius <= GroundY)
-                {
-                    state.BallX = FieldWidth - GoalWidth + BallRadius + 1f;
-                    state.BallY = Math.Clamp(yAtCross, GoalY + BallRadius, GroundY - BallRadius);
-                    return;
-                }
+                float nx = distRightX / distRight;
+                float ny = distRightY / distRight;
+                state.BallX = rightGoalX + nx * scaledRadius;
+                state.BallY = GoalY + ny * scaledRadius;
+
+                // Ricoșeu fizic
+                float dot = _velBallX * nx + _velBallY * ny;
+                _velBallX = (_velBallX - 2 * dot * nx) * 0.8f;
+                _velBallY = (_velBallY - 2 * dot * ny) * 0.8f;
             }
 
-            bool inLeftGoalArea = state.BallX + BallRadius <= GoalWidth
-                                   && state.BallY - BallRadius >= GoalY
-                                   && state.BallY + BallRadius <= GroundY;
-            bool inRightGoalArea = state.BallX - BallRadius >= FieldWidth - GoalWidth
-                                   && state.BallY - BallRadius >= GoalY
-                                   && state.BallY + BallRadius <= GroundY;
-
-            if (!inLeftGoalArea && !inRightGoalArea)
+            // --- 2. COLIZIUNE CU PARTEA PLATĂ A BAREI (Sus / Jos) ---
+            // Poarta Stânga
+            if (state.BallX <= GoalWidth)
             {
-                float prevTop = _prevBallY - BallRadius;
-                float currTop = state.BallY - BallRadius;
-
-                if (prevTop <= GoalY && currTop > GoalY &&
-                    state.BallX >= 0 && state.BallX <= GoalWidth)
+                if (_prevBallY + scaledRadius <= GoalY && state.BallY + scaledRadius > GoalY)
                 {
-                    state.BallY = GoalY + BallRadius;
+                    state.BallY = GoalY - scaledRadius;
                     _velBallY *= -0.6f;
+                    _velBallX *= 0.85f;
                 }
-
-                if (prevTop <= GoalY && currTop > GoalY &&
-                    state.BallX >= FieldWidth - GoalWidth && state.BallX <= FieldWidth)
+                else if (_prevBallY - scaledRadius >= GoalY && state.BallY - scaledRadius < GoalY)
                 {
-                    state.BallY = GoalY + BallRadius;
+                    state.BallY = GoalY + scaledRadius;
                     _velBallY *= -0.6f;
                 }
             }
-
-            if (state.BallY >= GroundY - BallRadius)
+            // Poarta Dreapta
+            if (state.BallX >= rightGoalX)
             {
-                state.BallY = GroundY - BallRadius;
+                if (_prevBallY + scaledRadius <= GoalY && state.BallY + scaledRadius > GoalY)
+                {
+                    state.BallY = GoalY - scaledRadius;
+                    _velBallY *= -0.6f;
+                    _velBallX *= 0.85f;
+                }
+                else if (_prevBallY - scaledRadius >= GoalY && state.BallY - scaledRadius < GoalY)
+                {
+                    state.BallY = GoalY + scaledRadius;
+                    _velBallY *= -0.6f;
+                }
+            }
+
+            // --- MARGINILE TERENULUI ---
+            // Podea
+            if (state.BallY >= GroundY - scaledRadius)
+            {
+                state.BallY = GroundY - scaledRadius;
                 _velBallY *= -0.6f;
                 _velBallX *= 0.85f;
             }
 
-            if (state.BallX <= BallRadius) { state.BallX = BallRadius; _velBallX *= -0.8f; }
-            if (state.BallX >= FieldWidth - BallRadius) { state.BallX = FieldWidth - BallRadius; _velBallX *= -0.8f; }
+            // Pereți laterali (plasa din spate a porților)
+            if (state.BallX <= scaledRadius) { state.BallX = scaledRadius; _velBallX *= -0.8f; }
+            if (state.BallX >= FieldWidth - scaledRadius) { state.BallX = FieldWidth - scaledRadius; _velBallX *= -0.8f; }
 
-            if (state.BallY <= BallRadius) { state.BallY = BallRadius; _velBallY *= -0.6f; }
+            // Tavan
+            if (state.BallY <= scaledRadius) { state.BallY = scaledRadius; _velBallY *= -0.6f; }
 
-            // Coliziune cu jucatorii
-            CheckPlayerBallCollision(state.Player1X, state.Player1Y, ref state.BallX,
-                ref state.BallY, input1.Kick, 1, BallRadius * state.BallScale);
-
-            CheckPlayerBallCollision(state.Player2X, state.Player2Y, ref state.BallX,
-                ref state.BallY, input2.Kick, -1, BallRadius * state.BallScale);
+            // --- COLIZIUNE CU JUCĂTORII ---
+            CheckPlayerBallCollision(state.Player1X, state.Player1Y, ref state.BallX, ref state.BallY, input1.Kick, 1, scaledRadius);
+            CheckPlayerBallCollision(state.Player2X, state.Player2Y, ref state.BallX, ref state.BallY, input2.Kick, -1, scaledRadius);
         }
 
         private void CheckPlayerBallCollision(float px, float py, ref float bx, ref float by,
@@ -219,22 +231,26 @@ namespace HeadFootball.Server
         public int CheckGoal(GameState state)
         {
             float radius = BallRadius * state.BallScale;
-            bool isInGoalHeight = state.BallY >= (GroundY - GoalHeight);
 
-            if (isInGoalHeight && (state.BallX - radius <= GoalWidth))
+            // Verificăm dacă mingea este sub bara transversală
+            bool isInGoalHeight = state.BallY >= GoalY;
+
+            // Gol Stânga (mingea a intrat de tot și atinge marginea stângă a ecranului)
+            if (isInGoalHeight && state.BallX <= radius + 5f)
             {
                 int goals = state.Player2ActivePowerUp == 4 ? 2 : 1;
                 ResetBall(state);
                 SpawnPowerUp(state);
-                return 20 + goals;
+                return 20 + goals; // P2 primește punct(e)
             }
 
-            if (isInGoalHeight && (state.BallX + radius >= FieldWidth - GoalWidth))
+            // Gol Dreapta (mingea a intrat de tot și atinge marginea dreaptă a ecranului)
+            if (isInGoalHeight && state.BallX >= FieldWidth - radius - 5f)
             {
                 int goals = state.Player1ActivePowerUp == 4 ? 2 : 1;
                 ResetBall(state);
                 SpawnPowerUp(state);
-                return 10 + goals;
+                return 10 + goals; // P1 primește punct(e)
             }
 
             return 0;

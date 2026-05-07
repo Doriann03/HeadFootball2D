@@ -2,13 +2,34 @@
 
 namespace Headfootball.Client
 {
+    
     public class GameRenderer
     {
         private const float FieldW = 700;
         private const float FieldH = 400;
         private const float GroundY = 330;
-        private const float GoalH = 120;
-        private const float GoalW = 40;
+        private const float GoalH = 160;
+        private const float GoalW = 50;
+        private Image? imgHead1;
+        private Image? imgHead2;
+        private Image? imgFoot1;
+        private Image? imgFoot2;
+
+        public GameRenderer()
+        {
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets");
+            try
+            {
+                imgHead1 = Image.FromFile(Path.Combine(path, "head1.png"));
+                imgHead2 = Image.FromFile(Path.Combine(path, "head2.png"));
+                imgFoot1 = Image.FromFile(Path.Combine(path, "foot1.png")); // Gheata pt P1
+                imgFoot2 = Image.FromFile(Path.Combine(path, "foot2.png")); // Gheata pt P2
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Eroare la încărcarea resurselor: " + ex.Message);
+            }
+        }
 
         public void Draw(Graphics g, GameState state, int playerId)
         {
@@ -21,71 +42,53 @@ namespace Headfootball.Client
             using var groundBrush = new SolidBrush(Color.SaddleBrown);
             g.FillRectangle(groundBrush, 0, GroundY, FieldW, FieldH - GroundY);
 
-            using var goalBrush = new SolidBrush(Color.White);
-            using var goalPen = new Pen(Color.Gray, 3);
-            g.FillRectangle(goalBrush, 0, GroundY - GoalH, GoalW, GoalH);
-            g.DrawRectangle(goalPen, 0, GroundY - GoalH, GoalW, GoalH);
-            g.FillRectangle(goalBrush, FieldW - GoalW, GroundY - GoalH, GoalW, GoalH);
-            g.DrawRectangle(goalPen, FieldW - GoalW, GroundY - GoalH, GoalW, GoalH);
+            DrawGoals(g);
 
             // Power-up pe teren
             if (state.PowerUpVisible)
                 DrawPowerUp(g, state.PowerUpX, state.PowerUpY, state.PowerUpType);
 
-            DrawPlayer(g, state.Player1X, state.Player1Y, Color.DodgerBlue,
-                       Color.DarkBlue, "P1", playerId == 1,
-                       state.Player1Kicking, true);
-
-            DrawPlayer(g, state.Player2X, state.Player2Y, Color.Tomato,
-                       Color.DarkRed, "P2", playerId == 2,
-                       state.Player2Kicking, false);
+            // Desenăm Jucătorii (fără culori, doar datele necesare)
+            DrawPlayer(g, state.Player1X, state.Player1Y, "P1", playerId == 1, state.Player1Kicking, true);
+            DrawPlayer(g, state.Player2X, state.Player2Y, "P2", playerId == 2, state.Player2Kicking, false);
 
             DrawBall(g, state.BallX, state.BallY, state.BallScale);
             DrawPowerUpIndicators(g, state);
             DrawHUD(g, state);
         }
 
-        private void DrawPlayer(Graphics g, float x, float y,
-                                  Color bodyColor, Color headColor,
-                                  string label, bool isYou,
-                                  bool isKicking, bool facingRight)
+        private void DrawPlayer(Graphics g, float x, float y, string label, bool isYou, bool isKicking, bool facingRight)
         {
-            const float pw = 40, ph = 60;
-            const float headR = 22;
+            const float pw = 40;
+            float headDisplaySize = 70;
 
-            using var bodyBrush = new SolidBrush(bodyColor);
-            g.FillRectangle(bodyBrush, x, y + ph / 2, pw, ph / 2);
+            // 1. Alegem imaginea corectă pe baza direcției (P1=true, P2=false)
+            Image imgToDraw = facingRight ? imgHead2! : imgHead1!;
+            Image bootImg = facingRight ? imgFoot2! : imgFoot1!;
 
-            using var bootBrush = new SolidBrush(Color.FromArgb(40, 40, 40));
-            using var bootPen = new Pen(Color.Black, 1.5f);
+            // 2. Desenăm Capul
+            g.DrawImage(imgToDraw, x - (headDisplaySize - pw) / 2, y, headDisplaySize, headDisplaySize);
+
+            // 3. Desenăm Gheata
+            float bootW = 55, bootH = 35;
+            float bootX = facingRight ? x + 15 : x - 10;
+            float bootY = y + 45;
 
             if (isKicking)
             {
-                float kickX = facingRight ? x + pw : x - 18;
-                float kickY = y + ph / 2 + 5;
-                g.FillEllipse(bootBrush, kickX, kickY, 22, 12);
-                g.DrawEllipse(bootPen, kickX, kickY, 22, 12);
+                float kickOffset = facingRight ? 25 : -25;
+                g.DrawImage(bootImg, bootX + kickOffset, bootY - 10, bootW, bootH);
             }
             else
             {
-                g.FillEllipse(bootBrush, x + 2, y + ph - 10, 16, 12);
-                g.DrawEllipse(bootPen, x + 2, y + ph - 10, 16, 12);
-                g.FillEllipse(bootBrush, x + pw - 18, y + ph - 10, 16, 12);
-                g.DrawEllipse(bootPen, x + pw - 18, y + ph - 10, 16, 12);
+                g.DrawImage(bootImg, bootX, bootY, bootW, bootH);
             }
 
-            using var headBrush = new SolidBrush(headColor);
-            g.FillEllipse(headBrush, x - 2, y, headR * 2, headR * 2);
-            using var outlinePen = new Pen(Color.Black, 1.5f);
-            g.DrawEllipse(outlinePen, x - 2, y, headR * 2, headR * 2);
-
-            g.FillEllipse(Brushes.White, x + 8, y + 8, 8, 8);
-            g.FillEllipse(Brushes.Black, x + 10, y + 10, 4, 4);
-
+            // 4. Desenăm eticheta
             string displayLabel = isYou ? "YOU" : label;
             using var font = new Font("Arial", 8, FontStyle.Bold);
             using var labelBrush = new SolidBrush(isYou ? Color.Yellow : Color.White);
-            g.DrawString(displayLabel, font, labelBrush, x, y - 18);
+            g.DrawString(displayLabel, font, labelBrush, x + 5, y - 20);
         }
 
         private void DrawBall(Graphics g, float x, float y, float scale)
@@ -140,16 +143,30 @@ namespace Headfootball.Client
 
         private void DrawHUD(Graphics g, GameState state)
         {
-            using var hudBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0));
-            g.FillRectangle(hudBrush, 200, 5, 300, 45);
+            float centerX = FieldW / 2; // Mijlocul terenului (350)
 
-            using var scorFont = new Font("Arial", 22, FontStyle.Bold);
-            string score = $"{state.Score1}  :  {state.Score2}";
-            g.DrawString(score, scorFont, Brushes.White, 250, 8);
+            // 1. Fundal pentru scor (opțional, pentru contrast)
+            using var hudBrush = new SolidBrush(Color.FromArgb(150, 0, 0, 0));
+            g.FillRectangle(hudBrush, centerX - 80, 5, 160, 50);
 
-            using var timeFont = new Font("Arial", 10);
-            string time = $"⏱ {state.TimeLeft}s";
-            g.DrawString(time, timeFont, Brushes.Yellow, 320, 38);
+            // 2. Scorul - folosim un font mai mare și "Impact" pentru aspect sportiv
+            using var scorFont = new Font("Impact", 28, FontStyle.Regular);
+            string scoreText = $"{state.Score1} : {state.Score2}";
+
+            // Calculăm dimensiunea exactă a textului pentru centrare
+            SizeF scoreSize = g.MeasureString(scoreText, scorFont);
+            g.DrawString(scoreText, scorFont, Brushes.White, centerX - (scoreSize.Width / 2), 5);
+
+            // 3. Timerul - îl punem fix sub scor
+            using var timeFont = new Font("Segoe UI", 16, FontStyle.Bold); // Am crescut fontul de la 12 la 16
+            string timeText = $"⏱ {state.TimeLeft}s";
+
+            SizeF timeSize = g.MeasureString(timeText, timeFont);
+            // Timerul devine roșu sub 10 secunde
+            Brush timeColor = state.TimeLeft <= 10 ? Brushes.Red : Brushes.Yellow;
+
+            // Am coborât poziția pe verticală de la 42 la 55
+            g.DrawString(timeText, timeFont, timeColor, centerX - (timeSize.Width / 2), 55);
         }
 
         public void DrawWaiting(Graphics g, int playerId)
@@ -178,6 +195,60 @@ namespace Headfootball.Client
             g.DrawString(winner, font, Brushes.White, 210, 200);
             g.DrawString($"Scor final: {state.Score1} - {state.Score2}",
                          smallFont, Brushes.LightGray, 260, 260);
+        }
+
+        private static void DrawGoals(Graphics g)
+        {
+            float frameThickness = 8f; // Grosimea barei
+            using var frameBrush = new SolidBrush(Color.LightSteelBlue); // Culoarea barelor
+            using var frameBorderPen = new Pen(Color.DarkSlateGray, 2);  // Conturul barelor
+            using var netPen = new Pen(Color.WhiteSmoke, 2); // Plasa albă
+
+            // Funcție internă pentru a desena o singură poartă
+            void DrawSingleGoal(float xStart, bool isLeft)
+            {
+                // --- 1. Desenăm Plasa (Romburi) ---
+                // Definim zona (dreptunghiul) în care are voie să fie desenată plasa
+                RectangleF goalRect = new RectangleF(isLeft ? 0 : xStart, GroundY - GoalH, GoalW, GoalH);
+
+                // Blocăm desenarea în afara acestui dreptunghi
+                g.SetClip(goalRect);
+
+                int spacing = 12; // Cât de deasă e plasa
+                                  // Desenăm linii diagonale
+                for (int i = -300; i < 300; i += spacing)
+                {
+                    g.DrawLine(netPen, goalRect.Left, goalRect.Top + i, goalRect.Right, goalRect.Top + i + goalRect.Width);
+                    g.DrawLine(netPen, goalRect.Left, goalRect.Bottom - i, goalRect.Right, goalRect.Bottom - i - goalRect.Width);
+                }
+                g.ResetClip(); // Scoatem limitarea pentru a desena restul elementelor normal
+
+                // --- 2. Desenăm Cadrul metalic (Barele) ---
+
+                // Bara din spate (pentru efect de adâncime 3D ca în poză)
+                float backPostX = isLeft ? 0 : xStart + GoalW - frameThickness;
+                RectangleF backPost = new RectangleF(backPostX, GroundY - GoalH, frameThickness, GoalH);
+                g.FillRectangle(frameBrush, backPost);
+                g.DrawRectangle(frameBorderPen, backPost.X, backPost.Y, backPost.Width, backPost.Height);
+
+                // Bara transversală (de sus)
+                RectangleF crossbar = new RectangleF(isLeft ? 0 : xStart, GroundY - GoalH, GoalW, frameThickness);
+                g.FillRectangle(frameBrush, crossbar);
+                g.DrawRectangle(frameBorderPen, crossbar.X, crossbar.Y, crossbar.Width, crossbar.Height);
+
+                // Bara verticală din față (stâlpul pe care îl lovește mingea)
+                float frontPostX = isLeft ? GoalW - frameThickness : xStart;
+                RectangleF frontPost = new RectangleF(frontPostX, GroundY - GoalH, frameThickness, GoalH);
+                g.FillRectangle(frameBrush, frontPost);
+                g.DrawRectangle(frameBorderPen, frontPost.X, frontPost.Y, frontPost.Width, frontPost.Height);
+            }
+
+            // Apelăm funcția pentru a desena poarta din Stânga
+            DrawSingleGoal(0, true);
+
+            // Apelăm funcția pentru a desena poarta din Dreapta
+            float rightGoalX = FieldW - GoalW;
+            DrawSingleGoal(rightGoalX, false);
         }
     }
 }
