@@ -14,7 +14,7 @@ namespace Headfootball.Client
         private Image? imgHead2;
         private Image? imgFoot1;
         private Image? imgFoot2;
-
+        private Image? imgBackground;
         public GameRenderer()
         {
             string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets");
@@ -24,6 +24,7 @@ namespace Headfootball.Client
                 imgHead2 = Image.FromFile(Path.Combine(path, "head2.png"));
                 imgFoot1 = Image.FromFile(Path.Combine(path, "foot1.png")); // Gheata pt P1
                 imgFoot2 = Image.FromFile(Path.Combine(path, "foot2.png")); // Gheata pt P2
+                imgBackground = Image.FromFile(Path.Combine(path, "bg.jpg"));
             }
             catch (Exception ex)
             {
@@ -33,14 +34,17 @@ namespace Headfootball.Client
 
         public void Draw(Graphics g, GameState state, int playerId)
         {
-            g.Clear(Color.FromArgb(34, 139, 34));
+            //g.Clear(Color.FromArgb(34, 139, 34));
+            if (imgBackground != null)
+            {
+                g.DrawImage(imgBackground, 0, 0, FieldW, FieldH);
+            }
+            else
+            {
+                g.Clear(Color.FromArgb(34, 139, 34)); // Fallback dacă lipsește imaginea
+            }
 
-            using var whitePen = new Pen(Color.White, 2);
-            g.DrawLine(whitePen, FieldW / 2, 0, FieldW / 2, GroundY);
-            g.DrawEllipse(whitePen, FieldW / 2 - 50, GroundY / 2 - 50, 100, 100);
-
-            using var groundBrush = new SolidBrush(Color.SaddleBrown);
-            g.FillRectangle(groundBrush, 0, GroundY, FieldW, FieldH - GroundY);
+         
 
             DrawGoals(g);
 

@@ -16,4 +16,10 @@
     <ProjectReference Include="..\HeadFootball.shared\HeadFootball.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Update="PhysicsEngine.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Compile>
+  </ItemGroup>
+
 </Project>
