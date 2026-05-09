@@ -15,6 +15,20 @@ namespace Headfootball.Client
         private Image? imgFoot1;
         private Image? imgFoot2;
         private Image? imgBackground;
+
+        // --- TEXTURĂ ȘI ROTAȚIE MINGE ---
+        private Image? imgBall;
+        private float _ballAngle = 0f;
+        private float _lastBallX = 350f;
+
+        private List<PointF> _ballTrail = new List<PointF>();
+        private int _goalTimer = 0;
+
+        // Metodă nouă pentru a declanșa animația de GOL
+        public void TriggerGoal()
+        {
+            _goalTimer = 30; // Va rula timp de 45 de cadre (aprox. 1.5 secunde)
+        }
         public GameRenderer()
         {
             string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets");
@@ -25,6 +39,7 @@ namespace Headfootball.Client
                 imgFoot1 = Image.FromFile(Path.Combine(path, "foot1.png")); // Gheata pt P1
                 imgFoot2 = Image.FromFile(Path.Combine(path, "foot2.png")); // Gheata pt P2
                 imgBackground = Image.FromFile(Path.Combine(path, "bg.jpg"));
+                imgBall = Image.FromFile(Path.Combine(path, "ball.png"));
             }
             catch (Exception ex)
             {
@@ -66,6 +81,45 @@ namespace Headfootball.Client
             DrawBall(g, state.BallX, state.BallY, state.BallScale);
             DrawPowerUpIndicators(g, state);
             DrawHUD(g, state);
+
+            // --- Desenăm textul de COUNTDOWN (Start Meci) ---
+            if (state.IsCountdown)
+            {
+                // Împărțim la 30 pentru a obține secundele (90 cadre = 3 secunde)
+                int sec = (int)Math.Ceiling(state.CountdownTimer / 30.0f);
+                string text = sec > 0 ? sec.ToString() : "START!";
+
+                using var countFont = new Font("Impact", 80, FontStyle.Italic);
+                SizeF size = g.MeasureString(text, countFont);
+
+                // Galben pentru numere, Verde pentru cuvântul START!
+                Brush b = sec > 0 ? Brushes.Yellow : Brushes.Lime;
+
+                // Umbră pentru efect 3D
+                g.DrawString(text, countFont, Brushes.Black, (FieldW - size.Width) / 2 + 5, (FieldH - size.Height) / 2 - 60 + 5);
+                g.DrawString(text, countFont, b, (FieldW - size.Width) / 2, (FieldH - size.Height) / 2 - 60);
+            }
+
+            // Animația de GOL ajustată (mai rapidă)
+            if (_goalTimer > 0)
+            {
+                _goalTimer--;
+
+                // Accelerăm zoom-ul: 30 cadre în loc de 45
+                float fontSize = 50 + (30 - _goalTimer) * 1.5f;
+                using var font = new Font("Impact", fontSize, FontStyle.Italic);
+
+                // Fade-out mai agresiv: înmulțim cu 15 în loc de 10
+                int alpha = Math.Min(255, _goalTimer * 15);
+                using var brush = new SolidBrush(Color.FromArgb(alpha, Color.Gold));
+
+                string text = "GOOOOL!";
+                SizeF size = g.MeasureString(text, font);
+
+                using var shadowBrush = new SolidBrush(Color.FromArgb(alpha, Color.Black));
+                g.DrawString(text, font, shadowBrush, (FieldW - size.Width) / 2 + 5, (FieldH - size.Height) / 2 + 5);
+                g.DrawString(text, font, brush, (FieldW - size.Width) / 2, (FieldH - size.Height) / 2);
+            }
         }
 
         private void DrawPlayer(Graphics g, float x, float y, string label, bool isYou, bool isKicking, bool facingRight, int emote, int emoteTimer)
@@ -80,15 +134,25 @@ namespace Headfootball.Client
             // 2. Desenăm Capul
             g.DrawImage(imgToDraw, x - (headDisplaySize - pw) / 2, y, headDisplaySize, headDisplaySize);
 
-            // 3. Desenăm Gheata
+            // 3. Desenăm Gheata (cu rotire!)
             float bootW = 55, bootH = 35;
             float bootX = facingRight ? x + 15 : x - 10;
             float bootY = y + 45;
 
             if (isKicking)
             {
-                float kickOffset = facingRight ? 25 : -25;
-                g.DrawImage(bootImg, bootX + kickOffset, bootY - 10, bootW, bootH);
+                var gfxState = g.Save(); // Salvăm starea grafică
+
+                float kickOffset = facingRight ? 20 : -20;
+                float rotAngle = facingRight ? -35 : 35; // Rotim gheata cu 35 de grade
+
+                // Mutăm punctul de origine în centrul ghetei
+                g.TranslateTransform(bootX + kickOffset + bootW / 2, bootY - 10 + bootH / 2);
+                g.RotateTransform(rotAngle);
+
+                // Desenăm centrat (originea e pe mijloc acum)
+                g.DrawImage(bootImg, -bootW / 2, -bootH / 2, bootW, bootH);
+                g.Restore(gfxState); // Resetăm pentru restul jocului
             }
             else
             {
@@ -123,12 +187,63 @@ namespace Headfootball.Client
 
         private void DrawBall(Graphics g, float x, float y, float scale)
         {
+            // --- 1. CALCULĂM ROTAȚIA MINGII ---
+            // Aflăm câți pixeli s-a mișcat mingea pe orizontală de la ultimul cadru
+            float dx = x - _lastBallX;
+
+            // O rotim proporțional. Dacă dx e pozitiv (merge la dreapta), se rotește în sensul acelor de ceas.
+            // Dacă dx e negativ (merge la stânga), se rotește invers!
+            _ballAngle += dx * 3f; // 3f este multiplicatorul de viteză pentru rotație
+
+            // Păstrăm unghiul în limite normale (0-360 grade)
+            _ballAngle %= 360;
+            _lastBallX = x;
+
+            // --- 2. CALCULĂM URMA (TRAIL-UL) ---
+            if (_ballTrail.Count > 0)
+            {
+                PointF lastPos = _ballTrail[_ballTrail.Count - 1];
+                float trailDx = x - lastPos.X, trailDy = y - lastPos.Y;
+                // Dacă mingea s-a teleportat brusc (resetare după gol), ștergem urma
+                if (trailDx * trailDx + trailDy * trailDy > 10000) _ballTrail.Clear();
+            }
+            _ballTrail.Add(new PointF(x, y));
+            if (_ballTrail.Count > 10) _ballTrail.RemoveAt(0);
+
+            // --- 3. DESENĂM URMA DE VITEZĂ ---
+            for (int i = 0; i < _ballTrail.Count; i++)
+            {
+                float trailRadius = (20 * scale) * (i / (float)_ballTrail.Count);
+                int alpha = (int)(150 * (i / (float)_ballTrail.Count));
+                using var brush = new SolidBrush(Color.FromArgb(alpha, 200, 255, 255));
+                g.FillEllipse(brush, _ballTrail[i].X - trailRadius, _ballTrail[i].Y - trailRadius, trailRadius * 2, trailRadius * 2);
+            }
+
+            // --- 4. DESENĂM TEXTURA MINGII CU ROTAȚIE ---
             float r = 20 * scale;
-            g.FillEllipse(Brushes.White, x - r, y - r, r * 2, r * 2);
-            using var pen = new Pen(Color.Black, 1.5f);
-            g.DrawEllipse(pen, x - r, y - r, r * 2, r * 2);
-            g.DrawLine(pen, x, y - r, x, y + r);
-            g.DrawLine(pen, x - r, y, x + r, y);
+
+            if (imgBall != null)
+            {
+                var gfxState = g.Save(); // Salvăm starea grafică pentru a nu roti tot terenul!
+
+                // Mutăm "centrul universului" grafic exact pe mijlocul mingii
+                g.TranslateTransform(x, y);
+
+                // Rotim universul cu unghiul mingii
+                g.RotateTransform(_ballAngle);
+
+                // Desenăm imaginea deasupra centrului (de la -r la +r)
+                g.DrawImage(imgBall, -r, -r, r * 2, r * 2);
+
+                g.Restore(gfxState); // Resetăm rotația pentru restul jocului
+            }
+            else
+            {
+                // Fallback de siguranță: dacă ai uitat să pui poza, desenăm o minge albă simplă
+                g.FillEllipse(Brushes.White, x - r, y - r, r * 2, r * 2);
+                using var pen = new Pen(Color.Black, 1.5f);
+                g.DrawEllipse(pen, x - r, y - r, r * 2, r * 2);
+            }
         }
 
         private void DrawPowerUp(Graphics g, float x, float y, int type)

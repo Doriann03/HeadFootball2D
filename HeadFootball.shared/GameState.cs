@@ -34,5 +34,12 @@
         public int Player2Emote = 0;
         public int Player1EmoteTimer = 0;
         public int Player2EmoteTimer = 0;
+
+        // --- Game Flow ---
+        public bool IsCountdown = true;
+        public int CountdownTimer = 90; // 3 secunde la 30 fps
+
+        public bool IsGoalPause = false;
+        public int GoalPauseTimer = 0;
     }
 }

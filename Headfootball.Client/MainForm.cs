@@ -62,6 +62,8 @@ namespace Headfootball.Client
         private Button _btnSendChat = new();
         private GamePanel _gamePanel = new();
 
+        private int _lastCountdownSec = 4;
+
         public MainForm(NetworkClient network, int playerId, string roomId = "")
         {
             _network = network;
@@ -107,12 +109,35 @@ namespace Headfootball.Client
                         if (state.Score1 > _lastScore1 || state.Score2 > _lastScore2)
                         {
                             AudioPlayer.Play("goal", false);
+                            _renderer.TriggerGoal(); // <-- DECLANȘEAZĂ TEXTUL URIAȘ
                         }
 
                         // 3. Sunet de ȘUT
                         if (state.BallWasKicked)
                         {
                             AudioPlayer.Play("kick", false);
+                        }
+
+                        // 4. SUNETE COUNTDOWN
+                        if (state.IsCountdown)
+                        {
+                            int sec = (int)Math.Ceiling(state.CountdownTimer / 30.0f);
+                            if (sec < _lastCountdownSec && sec > 0)
+                            {
+                                // Folosim sunetul de kick pe post de "Beep" la fiecare secundă
+                                AudioPlayer.Play("kick", false);
+                                _lastCountdownSec = sec;
+                            }
+                            else if (sec == 0 && _lastCountdownSec > 0)
+                            {
+                                // Folosim sunetul de galerie pe post de explozie de Start!
+                                AudioPlayer.Play("goal", false);
+                                _lastCountdownSec = 0;
+                            }
+                        }
+                        else
+                        {
+                            _lastCountdownSec = 4; // Reset pentru meciurile viitoare
                         }
 
                         // Salvăm starea pentru cadru următor

@@ -41,6 +41,36 @@ namespace HeadFootball.Server
         // Schimbat din 'int' in 'void'. Lăsăm doar GameRoom să apeleze CheckGoal!
         public void Update(GameState state, PlayerInput input1, PlayerInput input2)
         {
+            // --- 1. GESTIONARE TIMER PAUZĂ GOL ---
+            if (state.IsGoalPause)
+            {
+                state.GoalPauseTimer--;
+                if (state.GoalPauseTimer <= 0)
+                {
+                    state.IsGoalPause = false;
+                    ResetBall(state);     // Resetăm mingea abia după ce expiră pauza
+                    SpawnPowerUp(state);
+                }
+            }
+
+            // --- 2. GESTIONARE COUNTDOWN START MECI ---
+            if (state.IsCountdown)
+            {
+                state.CountdownTimer--;
+                if (state.CountdownTimer <= 0)
+                {
+                    state.IsCountdown = false;
+                }
+
+                // Blocăm jucătorii să nu se miște și ținem mingea fixată în aer la centru
+                input1.Left = input1.Right = input1.Jump = input1.Kick = false;
+                input2.Left = input2.Right = input2.Jump = input2.Kick = false;
+                state.BallX = FieldWidth / 2;
+                state.BallY = FieldHeight / 2;
+                _velBallX = 0;
+                _velBallY = 0;
+            }
+
             state.Player1Kicking = input1.Kick;
             state.Player2Kicking = input2.Kick;
 
@@ -260,27 +290,28 @@ namespace HeadFootball.Server
 
         public int CheckGoal(GameState state)
         {
-            float radius = BallRadius * state.BallScale;
+            // Dacă suntem deja în pauză sau în countdown, ignorăm verificarea de gol
+            if (state.IsGoalPause || state.IsCountdown) return 0;
 
-            // Verificăm dacă mingea este sub bara transversală
+            float radius = BallRadius * state.BallScale;
             bool isInGoalHeight = state.BallY >= GoalY;
 
-            // Gol Stânga (mingea a intrat de tot și atinge marginea stângă a ecranului)
+            // Gol Stânga 
             if (isInGoalHeight && state.BallX <= radius + 5f)
             {
                 int goals = state.Player2ActivePowerUp == 4 ? 2 : 1;
-                ResetBall(state);
-                SpawnPowerUp(state);
-                return 20 + goals; // P2 primește punct(e)
+                state.IsGoalPause = true;
+                state.GoalPauseTimer = 60; // Pauză de 2 secunde
+                return 20 + goals; // P2 primește punct
             }
 
-            // Gol Dreapta (mingea a intrat de tot și atinge marginea dreaptă a ecranului)
+            // Gol Dreapta 
             if (isInGoalHeight && state.BallX >= FieldWidth - radius - 5f)
             {
                 int goals = state.Player1ActivePowerUp == 4 ? 2 : 1;
-                ResetBall(state);
-                SpawnPowerUp(state);
-                return 10 + goals; // P1 primește punct(e)
+                state.IsGoalPause = true;
+                state.GoalPauseTimer = 60; // Pauză de 2 secunde
+                return 10 + goals; // P1 primește punct
             }
 
             return 0;
