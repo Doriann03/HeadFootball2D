@@ -24,6 +24,12 @@ namespace Headfootball.Client
                 case Keys.Down:
                 case Keys.Enter:
                 case Keys.Space:
+                case Keys.D1:      // <-- Tasta 1 sus
+                case Keys.D2:      // <-- Tasta 2 sus
+                case Keys.D3:      // <-- Tasta 3 sus
+                case Keys.NumPad1: // <-- Tasta 1 Numpad
+                case Keys.NumPad2: // <-- Tasta 2 Numpad
+                case Keys.NumPad3: // <-- Tasta 3 Numpad
                     return true;
             }
             return base.IsInputKey(keyData);
@@ -46,6 +52,7 @@ namespace Headfootball.Client
         private bool _wasGameStarted = false;
 
         private bool _keyLeft, _keyRight, _keyJump, _keyKick;
+        private int _currentEmote = 0;
 
         private System.Windows.Forms.Timer _renderTimer = new();
         private System.Windows.Forms.Timer _inputTimer = new();
@@ -304,13 +311,21 @@ namespace Headfootball.Client
                 Left = _keyLeft,
                 Right = _keyRight,
                 Jump = _keyJump,
-                Kick = _keyKick
+                Kick = _keyKick,
+                Emote = _currentEmote // Am reparat aici (fără testul cu _keyJump)
             });
+
+            // Lăsăm asta FĂRĂ _currentEmote = 0; aici. Resetarea se face corect în OnKeyUp.
         }
 
         private void OnKeyDown(object? sender, KeyEventArgs e)
         {
             if (_txtChatInput.Focused) return;
+
+            // Capturăm tastele numerice pentru Emotes (1, 2, 3)
+            if (e.KeyCode == Keys.D1 || e.KeyCode == Keys.NumPad1) _currentEmote = 1;
+            if (e.KeyCode == Keys.D2 || e.KeyCode == Keys.NumPad2) _currentEmote = 2;
+            if (e.KeyCode == Keys.D3 || e.KeyCode == Keys.NumPad3) _currentEmote = 3;
 
             if (_playerId == 1)
             {
@@ -325,11 +340,22 @@ namespace Headfootball.Client
                 if (e.KeyCode == Keys.Right) { _keyRight = true; e.Handled = true; }
                 if (e.KeyCode == Keys.Up) { _keyJump = true; e.Handled = true; }
                 if (e.KeyCode == Keys.Enter) { _keyKick = true; e.Handled = true; }
+
+                if (e.KeyCode == Keys.D1 || e.KeyCode == Keys.NumPad1)
+                {
+                    _currentEmote = 1;
+                    Console.WriteLine("DEBUG: Emote 1 detectat!"); // Linia asta îți va arăta în Output dacă tasta merge
+                }
             }
         }
 
         private void OnKeyUp(object? sender, KeyEventArgs e)
         {
+            // Resetăm emote-ul când ridică degetul de pe tasta 1, 2 sau 3
+            if (e.KeyCode == Keys.D1 || e.KeyCode == Keys.NumPad1) _currentEmote = 0;
+            if (e.KeyCode == Keys.D2 || e.KeyCode == Keys.NumPad2) _currentEmote = 0;
+            if (e.KeyCode == Keys.D3 || e.KeyCode == Keys.NumPad3) _currentEmote = 0;
+
             if (_playerId == 1)
             {
                 if (e.KeyCode == Keys.A) _keyLeft = false;

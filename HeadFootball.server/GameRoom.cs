@@ -57,6 +57,7 @@ namespace HeadFootball.Server
                 _input1.Right = input.Right;
                 _input1.Jump = input.Jump;
                 _input1.Kick = input.Kick;
+                _input1.Emote = input.Emote; // <-- PIESA LIPSĂ PENTRU P1!
             }
             else if (_player2 != null && client == _player2)
             {
@@ -64,6 +65,7 @@ namespace HeadFootball.Server
                 _input2.Right = input.Right;
                 _input2.Jump = input.Jump;
                 _input2.Kick = input.Kick;
+                _input2.Emote = input.Emote; // <-- PIESA LIPSĂ PENTRU P2!
             }
         }
 

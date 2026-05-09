@@ -59,15 +59,16 @@ namespace Headfootball.Client
                 DrawPowerUp(g, state.PowerUpX, state.PowerUpY, state.PowerUpType);
 
             // Desenăm Jucătorii (fără culori, doar datele necesare)
-            DrawPlayer(g, state.Player1X, state.Player1Y, "P1", playerId == 1, state.Player1Kicking, true);
-            DrawPlayer(g, state.Player2X, state.Player2Y, "P2", playerId == 2, state.Player2Kicking, false);
+            // Înlocuiește apelurile vechi de DrawPlayer cu acestea:
+            DrawPlayer(g, state.Player1X, state.Player1Y, "P1", playerId == 1, state.Player1Kicking, true, state.Player1Emote, state.Player1EmoteTimer);
+            DrawPlayer(g, state.Player2X, state.Player2Y, "P2", playerId == 2, state.Player2Kicking, false, state.Player2Emote, state.Player2EmoteTimer);
 
             DrawBall(g, state.BallX, state.BallY, state.BallScale);
             DrawPowerUpIndicators(g, state);
             DrawHUD(g, state);
         }
 
-        private void DrawPlayer(Graphics g, float x, float y, string label, bool isYou, bool isKicking, bool facingRight)
+        private void DrawPlayer(Graphics g, float x, float y, string label, bool isYou, bool isKicking, bool facingRight, int emote, int emoteTimer)
         {
             const float pw = 40;
             float headDisplaySize = 70;
@@ -99,6 +100,25 @@ namespace Headfootball.Client
             using var font = new Font("Arial", 8, FontStyle.Bold);
             using var labelBrush = new SolidBrush(isYou ? Color.Yellow : Color.White);
             g.DrawString(displayLabel, font, labelBrush, x + 5, y - 20);
+
+            // 5. Desenăm Emote-ul (dacă timerul e activ)
+            if (emoteTimer > 0 && emote > 0)
+            {
+                // Am înlocuit emoji-urile invizibile cu text
+                string emojiText = emote switch { 1 => "HAHA", 2 => "GRRR", 3 => "YAY!", _ => "..." };
+
+                using var emoteFont = new Font("Impact", 10);
+
+                float bubbleX = x + 15;
+                float bubbleY = y - 35;
+
+                // Desenăm balonul de dialog (l-am făcut puțin mai oval pentru text)
+                g.FillEllipse(Brushes.WhiteSmoke, bubbleX, bubbleY, 45, 25);
+                g.DrawEllipse(Pens.LightGray, bubbleX, bubbleY, 45, 25);
+
+                // Centram textul in balon
+                g.DrawString(emojiText, emoteFont, Brushes.Black, bubbleX + 5, bubbleY + 4);
+            }
         }
 
         private void DrawBall(Graphics g, float x, float y, float scale)

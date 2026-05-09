@@ -28,5 +28,11 @@
         public float BallScale = 1.0f; // pentru minge mai mare/mica
 
         public bool BallWasKicked = false;
+
+        // Emotes
+        public int Player1Emote = 0;
+        public int Player2Emote = 0;
+        public int Player1EmoteTimer = 0;
+        public int Player2EmoteTimer = 0;
     }
 }

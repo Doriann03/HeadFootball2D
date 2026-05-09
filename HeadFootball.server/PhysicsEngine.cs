@@ -59,6 +59,26 @@ namespace HeadFootball.Server
             // Gestionare Power-Up-uri
             UpdatePowerUpTimers(state);
             CheckPowerUpCollision(state);
+
+            // --- GESTIONARE EMOTES ---
+            // Dacă un jucător a apăsat o tastă de emote, îi setăm tipul și timerul (120 cadre = 2 secunde)
+            if (input1.Emote > 0)
+            {
+                state.Player1Emote = input1.Emote;
+                state.Player1EmoteTimer = 120;
+            }
+            if (input2.Emote > 0)
+            {
+                state.Player2Emote = input2.Emote;
+                state.Player2EmoteTimer = 120;
+            }
+
+            // Scădem timerul în fiecare cadru. Când ajunge la 0, ascundem emote-ul.
+            if (state.Player1EmoteTimer > 0) state.Player1EmoteTimer--;
+            else state.Player1Emote = 0;
+
+            if (state.Player2EmoteTimer > 0) state.Player2EmoteTimer--;
+            else state.Player2Emote = 0;
         }
 
         private void MovePlayer(ref float x, ref float y, ref float velY,

@@ -11,5 +11,6 @@ namespace HeadFootball.Shared
         public bool Right { get; set; }
         public bool Jump { get; set; }
         public bool Kick { get; set; }
+        public int Emote { get; set; } = 0;
     }
 }
