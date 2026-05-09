@@ -1,5 +1,5 @@
 ﻿using HeadFootball.Shared;
-
+using System.IO;
 namespace Headfootball.Client
 {
     public class GamePanel : Panel
@@ -39,6 +39,11 @@ namespace Headfootball.Client
         private bool _gameOver = false;
         private string _currentRoomId;
         private bool _isSwitchingForm = false;
+        private int _lastScore1 = 0;
+        private int _lastScore2 = 0;
+        private bool _lastKick1 = false;
+        private bool _lastKick2 = false;
+        private bool _wasGameStarted = false;
 
         private bool _keyLeft, _keyRight, _keyJump, _keyKick;
 
@@ -75,9 +80,54 @@ namespace Headfootball.Client
             _inputTimer.Tick += SendInput;
             _inputTimer.Start();
 
-            _network.OnStateReceived += state => _state = state;
+            //_network.OnStateReceived += state => _state = state;
+            //in loc de linia de mai sus, am pus urmatorul bloc de cod:
+            _network.OnStateReceived += state =>
+            {
+                // Punem DOAR partea de redare audio pe Thread-ul principal (UI Thread)
+                if (this.IsHandleCreated)
+                {
+                    this.BeginInvoke(() =>
+                    {
+                        // 1. Sunet Ambiental
+                        if (state.GameStarted && !_wasGameStarted)
+                        {
+                            AudioPlayer.Play("ambient", true);
+                            _wasGameStarted = true;
+                        }
+
+                        // 2. Sunet de GOL
+                        if (state.Score1 > _lastScore1 || state.Score2 > _lastScore2)
+                        {
+                            AudioPlayer.Play("goal", false);
+                        }
+
+                        // 3. Sunet de ȘUT
+                        if (state.BallWasKicked)
+                        {
+                            AudioPlayer.Play("kick", false);
+                        }
+
+                        // Salvăm starea pentru cadru următor
+                        _lastScore1 = state.Score1;
+                        _lastScore2 = state.Score2;
+                        _lastKick1 = state.Player1Kicking;
+                        _lastKick2 = state.Player2Kicking;
+                    });
+                }
+
+                _state = state; // Actualizăm starea jocului pe thread-ul de fundal
+            };
             _network.OnGameOver += state =>
             {
+                if (this.IsHandleCreated)
+                {
+                    this.BeginInvoke(() =>
+                    {
+                        AudioPlayer.Stop("ambient"); // OPRIM SUNETUL AICI ÎN SIGURANȚĂ
+                    });
+                }
+
                 _state = state;
                 _gameOver = true;
                 _inputTimer.Stop();
@@ -87,6 +137,12 @@ namespace Headfootball.Client
 
             // Dupa ce s-a construit UI, dam focus pe gamePanel
             this.Shown += (s, e) => _gamePanel.Focus();
+
+            // Preîncărcăm sunetele pentru a evita lag-ul de citire de pe disc
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets");
+            AudioPlayer.Load(Path.Combine(path, "ambient.wav"), "ambient");
+            AudioPlayer.Load(Path.Combine(path, "goal.wav"), "goal");
+            AudioPlayer.Load(Path.Combine(path, "kick.wav"), "kick");
         }
 
         private void BuildUI()

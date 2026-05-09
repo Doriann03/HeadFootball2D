@@ -1,6 +1,7 @@
 ﻿using System.Net.Sockets;
 using HeadFootball.Shared;
 using Newtonsoft.Json;
+using System.IO;
 
 namespace Headfootball.Client
 {

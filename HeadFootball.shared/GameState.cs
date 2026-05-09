@@ -26,5 +26,7 @@
         public int Player1PowerUpTimer = 0;
         public int Player2PowerUpTimer = 0;
         public float BallScale = 1.0f; // pentru minge mai mare/mica
+
+        public bool BallWasKicked = false;
     }
 }

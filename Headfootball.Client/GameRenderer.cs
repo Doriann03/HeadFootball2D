@@ -1,5 +1,5 @@
 ﻿using HeadFootball.Shared;
-
+using System.IO;
 namespace Headfootball.Client
 {
     
@@ -34,6 +34,12 @@ namespace Headfootball.Client
 
         public void Draw(Graphics g, GameState state, int playerId)
         {
+            // --- OPTIMIZĂRI DE PERFORMANȚĂ PENTRU GDI+ ---
+            g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighSpeed;
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Low;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighSpeed;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighSpeed;
+
             //g.Clear(Color.FromArgb(34, 139, 34));
             if (imgBackground != null)
             {

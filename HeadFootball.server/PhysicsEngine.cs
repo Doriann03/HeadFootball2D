@@ -184,13 +184,21 @@ namespace HeadFootball.Server
             // Tavan
             if (state.BallY <= scaledRadius) { state.BallY = scaledRadius; _velBallY *= -0.6f; }
 
-            // --- COLIZIUNE CU JUCĂTORII ---
-            CheckPlayerBallCollision(state.Player1X, state.Player1Y, ref state.BallX, ref state.BallY, input1.Kick, 1, scaledRadius);
-            CheckPlayerBallCollision(state.Player2X, state.Player2Y, ref state.BallX, ref state.BallY, input2.Kick, -1, scaledRadius);
+            // --- COLIZIUNE CU JUCATORII ---
+
+            // Resetăm semnalul la începutul verificării
+            state.BallWasKicked = false;
+
+            // Pasăm 'state' ca prim parametru la ambele metode
+            CheckPlayerBallCollision(state, state.Player1X, state.Player1Y, ref state.BallX,
+                ref state.BallY, input1.Kick, 1, BallRadius * state.BallScale);
+
+            CheckPlayerBallCollision(state, state.Player2X, state.Player2Y, ref state.BallX,
+                ref state.BallY, input2.Kick, -1, BallRadius * state.BallScale);
         }
 
-        private void CheckPlayerBallCollision(float px, float py, ref float bx, ref float by,
-                                               bool kick, float kickDir, float radius)
+        private void CheckPlayerBallCollision(GameState state, float px, float py, ref float bx, ref float by,
+                                       bool kick, float kickDir, float radius)
         {
             float centerX = px + PlayerWidth / 2;
             float centerY = py + PlayerHeight / 4;
@@ -224,6 +232,8 @@ namespace HeadFootball.Server
                         bx = centerX + nx * (bodyRadius + 1);
                         by = centerY + ny * (bodyRadius + 1);
                     }
+
+                    state.BallWasKicked = true;
                 }
             }
         }
