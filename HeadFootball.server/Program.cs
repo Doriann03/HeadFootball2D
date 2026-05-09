@@ -15,6 +15,7 @@ Console.WriteLine("Server pornit pe portul 5000. Astept conexiuni...");
 while (true)
 {
     var tcpClient = listener.AcceptTcpClient();
+    tcpClient.NoDelay = true;
     var handler = new ClientHandler(tcpClient, db, lobby);
     lobby.AddClient(handler);
     handler.Start();

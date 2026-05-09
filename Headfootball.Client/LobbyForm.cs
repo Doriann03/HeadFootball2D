@@ -6,6 +6,7 @@ namespace Headfootball.Client
     {
         private readonly NetworkClient _network;
         private string _currentRoomId = "";
+        private bool _isSwitchingForm = false;
 
         // Controale UI
         private ListBox _lstRooms = new();
@@ -193,11 +194,11 @@ namespace Headfootball.Client
 
                 if (asSpectator)
                 {
-                    // Spectatorul sare peste faza de Assigned, îl băgăm direct în meci cu ID 0
                     Console.WriteLine($"DEBUG: Intru ca spectator in camera '{_currentRoomId}'");
+                    _isSwitchingForm = true; // <-- ADAUGĂ ASTA
                     var gameForm = new MainForm(_network, 0, _currentRoomId);
                     gameForm.Show();
-                    this.Hide();
+                    this.Close(); // <-- SCHIMBĂ din this.Hide() în this.Close()
                 }
                 else
                 {
@@ -214,9 +215,10 @@ namespace Headfootball.Client
             this.BeginInvoke(() =>
             {
                 Console.WriteLine($"DEBUG OnPlayerAssigned: roomId este '{_currentRoomId}'");
+                _isSwitchingForm = true; // <-- ADAUGĂ ASTA
                 var gameForm = new MainForm(_network, playerId, _currentRoomId);
                 gameForm.Show();
-                this.Hide();
+                this.Close(); // <-- SCHIMBĂ din this.Hide() în this.Close()
             });
         }
 
@@ -265,8 +267,19 @@ namespace Headfootball.Client
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
+            // TĂIEM LEGĂTURILE LA SERVER!
+            _network.OnRoomList -= OnRoomList;
+            _network.OnRoomJoined -= OnRoomJoined;
+            _network.OnPlayerAssigned -= OnPlayerAssigned;
+            _network.OnChatReceived -= OnChatReceived;
+
             base.OnFormClosed(e);
-            Application.Exit(); // Oprește complet toate procesele clientului
+
+            // Închidem de tot aplicația doar dacă nu cumva tocmai am trecut la meci
+            if (!_isSwitchingForm)
+            {
+                Application.Exit();
+            }
         }
     }
 }

@@ -29,32 +29,6 @@ namespace HeadFootball.Server
         {
             _db = db;
 
-            // Pormim un thread care verifica camerele la fiecare secunda
-            new Thread(CheckRoomsForBot) { IsBackground = true }.Start();
-        }
-
-        private void CheckRoomsForBot()
-        {
-            while (true)
-            {
-                Thread.Sleep(1000);
-
-                lock (_lock)
-                {
-                    foreach (var room in _rooms)
-                    {
-                        // Daca jocul nu a inceput si a trecut timpul (10 secunde)...
-                        if (!room.InProgress && room.Player1 != null && room.Player2 == null)
-                        {
-                            if ((DateTime.Now - room.CreatedAt).TotalSeconds > 10)
-                            {
-                                Console.WriteLine($"Au trecut 10 secunde in camera {room.RoomId}. Bagam BOT-ul!");
-                                StartGame(room);
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         public void AddClient(ClientHandler client)
@@ -162,6 +136,12 @@ namespace HeadFootball.Server
                     room.Player2 = client;
                     Console.WriteLine($"[{client.Username}] a intrat in camera {roomId}");
                 }
+                if (!asSpectator && client == room.Player1)
+                {
+                    if (!room.InProgress) StartGame(room);
+                    return; // Ne oprim aici, să nu te adăugăm ca P2!
+                }
+                // ----------------------
 
                 client.Send(new NetworkMessage
                 {
@@ -203,8 +183,8 @@ namespace HeadFootball.Server
         {
             lock (_lock)
             {
-                var room = _rooms.FirstOrDefault(r =>
-                    r.Player1 == client || r.Player2 == client);
+                // AM SCHIMBAT AICI: Din FirstOrDefault în LastOrDefault!
+                var room = _rooms.LastOrDefault(r => r.Player1 == client || r.Player2 == client);
                 room?.Game?.ReceiveInput(client, msg);
             }
         }

@@ -36,6 +36,10 @@ namespace HeadFootball.Server
         private float _prevBallX = FieldWidth / 2;
         private float _prevBallY = FieldHeight / 2;
 
+        // Memorează dacă tasta era apăsată și în cadrul anterior
+        private bool _p1WasKicking = false;
+        private bool _p2WasKicking = false;
+
         private Random _rng = new();
 
         // Schimbat din 'int' in 'void'. Lăsăm doar GameRoom să apeleze CheckGoal!
@@ -235,16 +239,22 @@ namespace HeadFootball.Server
             if (state.BallY <= scaledRadius) { state.BallY = scaledRadius; _velBallY *= -0.6f; }
 
             // --- COLIZIUNE CU JUCATORII ---
-
-            // Resetăm semnalul la începutul verificării
             state.BallWasKicked = false;
 
-            // Pasăm 'state' ca prim parametru la ambele metode
+            // Logica "One-Shot": Șutăm CU FORȚĂ doar dacă acum e apăsat, dar în cadrul trecut NU ERA.
+            bool p1JustKicked = input1.Kick && !_p1WasKicking;
+            bool p2JustKicked = input2.Kick && !_p2WasKicking;
+
+            // Memorăm pentru cadrul următor
+            _p1WasKicking = input1.Kick;
+            _p2WasKicking = input2.Kick;
+
+            // Trimitem noile valori (p1JustKicked) către motorul de coliziune
             CheckPlayerBallCollision(state, state.Player1X, state.Player1Y, ref state.BallX,
-                ref state.BallY, input1.Kick, 1, BallRadius * state.BallScale);
+                ref state.BallY, p1JustKicked, 1, BallRadius * state.BallScale);
 
             CheckPlayerBallCollision(state, state.Player2X, state.Player2Y, ref state.BallX,
-                ref state.BallY, input2.Kick, -1, BallRadius * state.BallScale);
+                ref state.BallY, p2JustKicked, -1, BallRadius * state.BallScale);
         }
 
         private void CheckPlayerBallCollision(GameState state, float px, float py, ref float bx, ref float by,
@@ -395,6 +405,16 @@ namespace HeadFootball.Server
             state.BallY = FieldHeight / 2;
             _velBallX = 0;
             _velBallY = 0;
+
+            // Resetăm pozițiile jucătorilor ---
+            state.Player1X = 150;
+            state.Player1Y = GroundY - PlayerHeight;
+            _vel1Y = 0;
+
+            state.Player2X = FieldWidth - 150 - PlayerWidth;
+            state.Player2Y = GroundY - PlayerHeight;
+            _vel2Y = 0;
+            // -----------------------------------------------------------
 
             // Resetam și efectele cand se da un gol
             state.BallScale = 1.0f;

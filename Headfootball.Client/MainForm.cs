@@ -81,7 +81,7 @@ namespace Headfootball.Client
 
             BuildUI();
 
-            _renderTimer.Interval = 30;
+            _renderTimer.Interval = 16;
             _renderTimer.Tick += (s, e) => _gamePanel.Invalidate();
             _renderTimer.Start();
 
@@ -91,80 +91,8 @@ namespace Headfootball.Client
 
             //_network.OnStateReceived += state => _state = state;
             //in loc de linia de mai sus, am pus urmatorul bloc de cod:
-            _network.OnStateReceived += state =>
-            {
-                // Punem DOAR partea de redare audio pe Thread-ul principal (UI Thread)
-                if (this.IsHandleCreated)
-                {
-                    this.BeginInvoke(() =>
-                    {
-                        // 1. Sunet Ambiental
-                        if (state.GameStarted && !_wasGameStarted)
-                        {
-                            AudioPlayer.Play("ambient", true);
-                            _wasGameStarted = true;
-                        }
-
-                        // 2. Sunet de GOL
-                        if (state.Score1 > _lastScore1 || state.Score2 > _lastScore2)
-                        {
-                            AudioPlayer.Play("goal", false);
-                            _renderer.TriggerGoal(); // <-- DECLANȘEAZĂ TEXTUL URIAȘ
-                        }
-
-                        // 3. Sunet de ȘUT
-                        if (state.BallWasKicked)
-                        {
-                            AudioPlayer.Play("kick", false);
-                        }
-
-                        // 4. SUNETE COUNTDOWN
-                        if (state.IsCountdown)
-                        {
-                            int sec = (int)Math.Ceiling(state.CountdownTimer / 30.0f);
-                            if (sec < _lastCountdownSec && sec > 0)
-                            {
-                                // Folosim sunetul de kick pe post de "Beep" la fiecare secundă
-                                AudioPlayer.Play("kick", false);
-                                _lastCountdownSec = sec;
-                            }
-                            else if (sec == 0 && _lastCountdownSec > 0)
-                            {
-                                // Folosim sunetul de galerie pe post de explozie de Start!
-                                AudioPlayer.Play("goal", false);
-                                _lastCountdownSec = 0;
-                            }
-                        }
-                        else
-                        {
-                            _lastCountdownSec = 4; // Reset pentru meciurile viitoare
-                        }
-
-                        // Salvăm starea pentru cadru următor
-                        _lastScore1 = state.Score1;
-                        _lastScore2 = state.Score2;
-                        _lastKick1 = state.Player1Kicking;
-                        _lastKick2 = state.Player2Kicking;
-                    });
-                }
-
-                _state = state; // Actualizăm starea jocului pe thread-ul de fundal
-            };
-            _network.OnGameOver += state =>
-            {
-                if (this.IsHandleCreated)
-                {
-                    this.BeginInvoke(() =>
-                    {
-                        AudioPlayer.Stop("ambient"); // OPRIM SUNETUL AICI ÎN SIGURANȚĂ
-                    });
-                }
-
-                _state = state;
-                _gameOver = true;
-                _inputTimer.Stop();
-                ShowGameOver();
-            };
+            _network.OnStateReceived += OnStateReceivedHandler;
+            _network.OnGameOver += OnGameOverHandler;
             _network.OnChatReceived += OnChatReceived;
 
             // Dupa ce s-a construit UI, dam focus pe gamePanel
@@ -274,6 +202,39 @@ namespace Headfootball.Client
             _gamePanel.Focus();
         }
 
+
+        private void OnStateReceivedHandler(GameState state)
+        {
+            if (this.IsHandleCreated)
+            {
+                this.BeginInvoke(() =>
+                {
+                    if (state.GameStarted && !_wasGameStarted) { AudioPlayer.Play("ambient", true); _wasGameStarted = true; }
+                    if (state.Score1 > _lastScore1 || state.Score2 > _lastScore2) { AudioPlayer.Play("goal", false); _renderer.TriggerGoal(); }
+                    if (state.BallWasKicked) { AudioPlayer.Play("kick", false); }
+                    if (state.IsCountdown)
+                    {
+                        int sec = (int)Math.Ceiling(state.CountdownTimer / 30.0f);
+                        if (sec < _lastCountdownSec && sec > 0) { AudioPlayer.Play("kick", false); _lastCountdownSec = sec; }
+                        else if (sec == 0 && _lastCountdownSec > 0) { AudioPlayer.Play("goal", false); _lastCountdownSec = 0; }
+                    }
+                    else { _lastCountdownSec = 4; }
+
+                    _lastScore1 = state.Score1; _lastScore2 = state.Score2;
+                    _lastKick1 = state.Player1Kicking; _lastKick2 = state.Player2Kicking;
+                });
+            }
+            _state = state;
+        }
+
+        private void OnGameOverHandler(GameState state)
+        {
+            if (this.IsHandleCreated) this.BeginInvoke(() => { AudioPlayer.Stop("ambient"); });
+            _state = state;
+            _gameOver = true;
+            _inputTimer.Stop();
+            ShowGameOver();
+        }
         private void OnChatReceived(ChatPayload chat)
         {
             if (!this.IsHandleCreated) return;
@@ -284,6 +245,7 @@ namespace Headfootball.Client
                 _txtChatLog.ScrollToCaret();
             });
         }
+
 
         private void ShowGameOver()
         {
@@ -400,10 +362,13 @@ namespace Headfootball.Client
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             base.OnFormClosed(e);
-            if (!_isSwitchingForm) // Dacă NU schimbăm fereastra, închidem tot
-            {
-                Application.Exit();
-            }
+
+            // TĂIEM LEGĂTURILE pentru a preveni clonarea ferestrelor!
+            _network.OnStateReceived -= OnStateReceivedHandler;
+            _network.OnGameOver -= OnGameOverHandler;
+            _network.OnChatReceived -= OnChatReceived;
+
+            if (!_isSwitchingForm) { Application.Exit(); }
         }
     }
 }
