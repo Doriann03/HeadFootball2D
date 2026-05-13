@@ -119,6 +119,26 @@ namespace HeadFootball.Server
                 }
                 else
                 {
+                    // --- REZOLVAREA BOTULUI: Verificăm MAI ÎNTÂI dacă tu ești creatorul camerei ---
+                    if (client == room.Player1)
+                    {
+                        if (!room.InProgress) StartGame(room);
+
+                        // Trimitem confirmarea către client ca să poată deschide fereastra de joc
+                        client.Send(new NetworkMessage
+                        {
+                            Type = MessageType.RoomJoined,
+                            Payload = JsonConvert.SerializeObject(new JoinRoomPayload
+                            {
+                                RoomId = roomId,
+                                AsSpectator = false
+                            })
+                        });
+
+                        return; // NE OPRIM AICI! Astfel, room.Player2 rămâne NULL (adică Bot-ul se activează!)
+                    }
+                    // -------------------------------------------------------------------------------
+
                     if (room.Player2 != null || room.InProgress)
                     {
                         client.Send(new NetworkMessage
@@ -133,15 +153,10 @@ namespace HeadFootball.Server
                         return;
                     }
 
+                    // Abia acum te adăugăm ca Jucătorul 2, dacă ești o persoană complet diferită
                     room.Player2 = client;
                     Console.WriteLine($"[{client.Username}] a intrat in camera {roomId}");
                 }
-                if (!asSpectator && client == room.Player1)
-                {
-                    if (!room.InProgress) StartGame(room);
-                    return; // Ne oprim aici, să nu te adăugăm ca P2!
-                }
-                // ----------------------
 
                 client.Send(new NetworkMessage
                 {
@@ -155,7 +170,7 @@ namespace HeadFootball.Server
 
                 BroadcastRoomList();
 
-                // Daca sunt 2 jucatori (reali), pornim jocul
+                // Daca sunt 2 jucatori reali, pornim jocul
                 if (room.Player1 != null && room.Player2 != null && !room.InProgress)
                     StartGame(room);
             }
